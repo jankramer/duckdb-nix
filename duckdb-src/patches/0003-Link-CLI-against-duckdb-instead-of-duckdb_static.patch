@@ -1,0 +1,39 @@
+From 58cee5b8feac0bd182705b1b522e79f9d2b4311e Mon Sep 17 00:00:00 2001
+From: Jan Kramer <jan@jankramer.eu>
+Date: Sat, 6 Jun 2026 07:00:43 +0200
+Subject: [PATCH 3/3] Link CLI against duckdb instead of duckdb_static
+
+---
+ tools/CMakeLists.txt       | 2 +-
+ tools/shell/CMakeLists.txt | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tools/CMakeLists.txt b/tools/CMakeLists.txt
+index 815f90b835..4bc4370b9c 100644
+--- a/tools/CMakeLists.txt
++++ b/tools/CMakeLists.txt
+@@ -4,7 +4,7 @@ endif()
+ 
+ if(BUILD_SHELL)
+   add_executable(plan_serializer utils/plan_serializer.cpp)
+-  target_link_libraries(plan_serializer duckdb_static
++  target_link_libraries(plan_serializer duckdb
+                         ${DUCKDB_EXTRA_LINK_FLAGS})
+   link_extension_libraries(plan_serializer "")
+ endif()
+diff --git a/tools/shell/CMakeLists.txt b/tools/shell/CMakeLists.txt
+index 0d26359008..d83b7d05ee 100644
+--- a/tools/shell/CMakeLists.txt
++++ b/tools/shell/CMakeLists.txt
+@@ -29,7 +29,7 @@ set(SHELL_SOURCES
+ 
+ add_executable(shell ${SHELL_SOURCES})
+ 
+-target_link_libraries(shell duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
++target_link_libraries(shell duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+ link_threads(shell "")
+ if(STATIC_LIBCPP)
+   message("Statically linking CLI")
+-- 
+2.53.0
+

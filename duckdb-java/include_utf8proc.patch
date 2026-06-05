@@ -1,0 +1,12 @@
+diff --git a/src/jni/duckdb_java.cpp b/src/jni/duckdb_java.cpp
+--- a/src/jni/duckdb_java.cpp	(revision Staged)
++++ b/src/jni/duckdb_java.cpp	(date 1780645510875)
+@@ -196,8 +196,6 @@
+ 	}
+ }
+
+-#include "utf8proc_wrapper.hpp"
+-
+ jobject _duckdb_jdbc_prepare(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray query_j) {
+ 	auto conn_ref = get_connection(env, conn_ref_buf);
+ 	if (!conn_ref) {
