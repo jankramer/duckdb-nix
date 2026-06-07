@@ -13,18 +13,38 @@ let
     mkDuckdb = self.callPackage ./lib/mkDuckdb.nix { };
     mkExtension = self.callPackage ./lib/mkExtension.nix { };
 
-    extensions = {
+    extensions = rec {
       autocomplete = self.mkExtension { name = "autocomplete"; };
       core_functions = self.mkExtension { name = "core_functions"; };
+      demo_capi = self.mkExtension { name = "demo_capi"; };
       icu = self.mkExtension { name = "icu"; };
       json = self.mkExtension { name = "json"; };
       parquet = self.mkExtension { name = "parquet"; };
+      tpcds = self.mkExtension { name = "tpcds"; };
+      tpch = self.mkExtension { name = "tpch"; };
 
       avro = self.callPackage ./extensions/avro { };
+      aws = self.callPackage ./extensions/aws { };
+      azure = self.callPackage ./extensions/azure { };
+#      delta = self.callPackage ./extensions/delta { };
       ducklake = self.callPackage ./extensions/ducklake { };
+      encodings = self.callPackage ./extensions/encodings { };
+      excel = self.callPackage ./extensions/excel { };
+      fts = self.callPackage ./extensions/fts { };
       httpfs = self.callPackage ./extensions/httpfs { };
-      postgres = self.callPackage ./extensions/postgres { };
+#      iceberg = self.callPackage ./extensions/iceberg { };
+      inet = self.callPackage ./extensions/inet { };
+#      lance = self.callPackage ./extensions/lance { };
+#      mysql_scanner = self.callPackage ./extensions/mysql_scanner { };
+      odbc_scanner = self.callPackage ./extensions/odbc_scanner { };
+      postgres_scanner = self.callPackage ./extensions/postgres { };
       quack = self.callPackage ./extensions/quack { };
+#      spatial = self.callPackage ./extensions/spatial { };
+      sqlite_scanner = self.callPackage ./extensions/sqlite_scanner { };
+      sqlsmith = self.callPackage ./extensions/sqlsmith { };
+      unity_catalog = self.callPackage ./extensions/unity_catalog { };
+#      vortex = self.callPackage ./extensions/vortex { };
+      vss = self.callPackage ./extensions/vss { };
     };
 
     defaultExtensions = builtins.attrValues self.extensions;
@@ -44,7 +64,7 @@ let
 in
 scope.default.overrideAttrs (previousAttrs: {
   passthru = (previousAttrs.passthru or { }) // {
-    inherit (scope) withExtensions mkExtension extensions;
+    inherit (scope) withExtensions mkExtension extensions defaultExtensionNames defaultExtensions;
 
     src = scope.duckdb-src;
     core = scope.duckdb-core;

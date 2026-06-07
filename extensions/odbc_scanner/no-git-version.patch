@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6b2e8a9..9d7c0c5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -22,7 +22,7 @@ if(DEFINED DUCKDB_MODULE_BASE_DIR)
+             OUTPUT_VARIABLE ${EXTENSION_NAME}_GIT_COMMIT_HASH
+             OUTPUT_STRIP_TRAILING_WHITESPACE)
+     else()
+-        message(FATAL_ERROR "Unable to get Git version for extension: ${EXTENSION_NAME}")
++        set(${EXTENSION_NAME}_GIT_COMMIT_HASH "8a3266017a")
+     endif()
+ endif()
+ # end CMake-only build config

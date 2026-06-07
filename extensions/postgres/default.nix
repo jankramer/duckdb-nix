@@ -8,7 +8,7 @@
 }:
 
 mkExtension {
-  name = "postgres";
+  name = "postgres_scanner";
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-postgres";
