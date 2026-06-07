@@ -13,7 +13,7 @@ let
     mkDuckdb = self.callPackage ./lib/mkDuckdb.nix { };
     mkExtension = self.callPackage ./lib/mkExtension.nix { };
 
-    extensions = rec {
+    extensions = {
       autocomplete = self.mkExtension { name = "autocomplete"; };
       core_functions = self.mkExtension { name = "core_functions"; };
       demo_capi = self.mkExtension { name = "demo_capi"; };
