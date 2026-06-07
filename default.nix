@@ -17,6 +17,7 @@ let
       autocomplete = self.mkExtension { name = "autocomplete"; };
       core_functions = self.mkExtension { name = "core_functions"; };
       icu = self.mkExtension { name = "icu"; };
+      json = self.mkExtension { name = "json"; };
       parquet = self.mkExtension { name = "parquet"; };
 
       avro = self.callPackage ./extensions/avro { };
