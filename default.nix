@@ -44,7 +44,13 @@ let
       vss = self.callPackage ./extensions/vss { };
     };
 
-    defaultExtensions = builtins.attrValues self.extensions;
+    defaultExtensions = [
+        self.extensions.core_functions
+        self.extensions.parquet
+        self.extensions.httpfs
+        self.extensions.icu
+        self.extensions.json
+    ];
 
     default = self.mkDuckdb {
       configuredExtensions = self.defaultExtensions;
