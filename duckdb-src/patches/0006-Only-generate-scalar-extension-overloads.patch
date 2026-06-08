@@ -1,0 +1,38 @@
+--- a/scripts/generate_extensions_function.py
++++ b/scripts/generate_extensions_function.py
+@@ -667,12 +667,15 @@
+         for function, function_overloads in overloads.items():
+             extension_overloads = []
+             for overload in function_overloads:
++                if overload.type != CatalogType.SCALAR:
++                    continue
+                 extension_overloads.append(
+                     ExtensionFunctionOverload(
+                         extension_name, overload.name, overload.type, overload.parameters, overload.return_type
+                     )
+                 )
+-            result[function] = extension_overloads
++            if extension_overloads:
++                result[function] = extension_overloads
+         return result
+ 
+     def add_functions(
+@@ -697,13 +700,15 @@
+         for function in added_functions:
+             if function in self.function_overloads:
+                 # function is in overload map - add overloads
+-                self.function_overloads[function] += overloads[function]
++                if function in overloads:
++                    self.function_overloads[function] += overloads[function]
+             elif function in self.function_map:
+                 # function is in function map and we are trying to add it again
+                 # this means the function is present in multiple extensions
+                 # remove from function map, and add to overload map
+-                self.function_overloads[function] = self.all_function_overloads[function] + overloads[function]
+-                del self.function_map[function]
++                if function in self.all_function_overloads and function in overloads:
++                    self.function_overloads[function] = self.all_function_overloads[function] + overloads[function]
++                    del self.function_map[function]
+             else:
+                 functions_to_add[function] = ExtensionFunction(extension_name, function.name, function.type)
+ 

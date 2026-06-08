@@ -7,6 +7,18 @@
   zlib,
 }:
 
+let
+  aws-sdk-cpp-minimal = aws-sdk-cpp.override {
+    apis = [
+      "core"
+      "identity-management"
+      "rds"
+      "sso"
+      "sts"
+    ];
+  };
+in
+
 mkExtension {
   name = "aws";
 
@@ -18,7 +30,7 @@ mkExtension {
   };
 
   buildInputs = [
-    aws-sdk-cpp
+    aws-sdk-cpp-minimal
     curl
     openssl
     zlib

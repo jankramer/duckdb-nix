@@ -1,0 +1,14 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 21ee34d..eba52d0 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -142,6 +142,9 @@ endif()
+ target_link_libraries(${EXTENSION_NAME} PUBLIC roaring::roaring roaring::roaring-headers roaring::roaring-headers-cpp)
+ target_link_libraries(${TARGET_NAME}_loadable_extension roaring::roaring roaring::roaring-headers roaring::roaring-headers-cpp)
+ 
++target_link_libraries(${EXTENSION_NAME} PUBLIC duckdb_mbedtls)
++target_link_libraries(${TARGET_NAME}_loadable_extension duckdb_mbedtls)
++
+ install(
+   TARGETS ${EXTENSION_NAME} ${TARGET_NAME}_loadable_extension
+   EXPORT "${DUCKDB_EXPORT_SET}"

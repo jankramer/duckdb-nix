@@ -26,24 +26,20 @@ let
       avro = self.callPackage ./extensions/avro { };
       aws = self.callPackage ./extensions/aws { };
       azure = self.callPackage ./extensions/azure { };
-#      delta = self.callPackage ./extensions/delta { };
       ducklake = self.callPackage ./extensions/ducklake { };
       encodings = self.callPackage ./extensions/encodings { };
       excel = self.callPackage ./extensions/excel { };
       fts = self.callPackage ./extensions/fts { };
       httpfs = self.callPackage ./extensions/httpfs { };
-#      iceberg = self.callPackage ./extensions/iceberg { };
+      iceberg = self.callPackage ./extensions/iceberg { };
       inet = self.callPackage ./extensions/inet { };
-#      lance = self.callPackage ./extensions/lance { };
-#      mysql_scanner = self.callPackage ./extensions/mysql_scanner { };
+      mysql_scanner = self.callPackage ./extensions/mysql_scanner { };
       odbc_scanner = self.callPackage ./extensions/odbc_scanner { };
       postgres_scanner = self.callPackage ./extensions/postgres { };
       quack = self.callPackage ./extensions/quack { };
-#      spatial = self.callPackage ./extensions/spatial { };
       sqlite_scanner = self.callPackage ./extensions/sqlite_scanner { };
       sqlsmith = self.callPackage ./extensions/sqlsmith { };
       unity_catalog = self.callPackage ./extensions/unity_catalog { };
-#      vortex = self.callPackage ./extensions/vortex { };
       vss = self.callPackage ./extensions/vss { };
     };
 

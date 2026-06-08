@@ -1,0 +1,6 @@
+diff --git a/src/include/duckdb/main/extension_entries.hpp b/src/include/duckdb/main/extension_entries.hpp
+--- a/src/include/duckdb/main/extension_entries.hpp
++++ b/src/include/duckdb/main/extension_entries.hpp
+@@ -48 +48 @@
+-	char signature[96];
++	char signature[256];
