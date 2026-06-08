@@ -1,0 +1,35 @@
+Index: src/gcs_filesystem.cpp
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/gcs_filesystem.cpp b/src/gcs_filesystem.cpp
+--- a/src/gcs_filesystem.cpp	(revision 6658210c3f140c52ae7470e67bf99b7c974385f0)
++++ b/src/gcs_filesystem.cpp	(date 1780238818401)
+@@ -729,8 +729,8 @@
+                                                                 const std::string &path,
+                                                                 const GCSParsedUrl &parsed_url) {
+ 	auto secret_match = LookupSecret(opener, path);
+-	if (secret_match.HasMatch()) {
+-		auto read_options = ParseGCSReadOptions(opener);
++	auto read_options = ParseGCSReadOptions(opener);
++	if (secret_match.HasMatch()) {
+ 		auto &kv_secret = dynamic_cast<const KeyValueSecret &>(secret_match.GetSecret());
+ 		auto provider = kv_secret.TryGetValue("provider");
+ 
+@@ -761,6 +761,15 @@
+ 		}
+ 	}
+ 
++	// Fallback to ADC if no credentials are found.
++	try {
++		auto credentials = google::cloud::MakeGoogleDefaultCredentials();
++		auto client = BuildOptimizedClient(credentials, ca_roots_path, read_options);
++		return make_shared_ptr<GCSContextState>(std::move(client), read_options);
++	} catch (...) {
++		// Fall through to the error message below.
++	}
++
+ 	// Provide helpful error message
+ 	std::string error_msg = "No valid GCP credentials found.\n\n";
+ 	error_msg += "The Google Cloud Storage extension requires authentication.\n";

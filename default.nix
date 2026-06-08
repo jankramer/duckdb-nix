@@ -30,6 +30,7 @@ let
       encodings = self.callPackage ./extensions/encodings { };
       excel = self.callPackage ./extensions/excel { };
       fts = self.callPackage ./extensions/fts { };
+      gcs = self.callPackage ./extensions/gcs { };
       httpfs = self.callPackage ./extensions/httpfs { };
       iceberg = self.callPackage ./extensions/iceberg { };
       inet = self.callPackage ./extensions/inet { };
