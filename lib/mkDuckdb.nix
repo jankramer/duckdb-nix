@@ -171,6 +171,10 @@ stdenv.mkDerivation {
         ''}
       done < <(find "$root" -type f -print0)
     done
+
+    ${lib.optionalString withJdbc ''
+    jar uf $out/share/java/duckdb_jdbc.jar -C $out/lib ${sharedLib "libduckdb_java"}
+    ''}
   '';
 
   disallowedReferences = [ duckdb-core ];
