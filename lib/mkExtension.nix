@@ -54,13 +54,7 @@ lib.extendMkDerivation {
         echo "duckdb_extension_load(${extensionName} DONT_LINK ${extensionSrcFlag})" > extension/extension_config.cmake
       '';
 
-      buildPhase = ''
-        runHook preBuild
-
-        cmake --build . --config Release --target duckdb_local_extension_repo
-
-        runHook postBuild
-      '';
+      ninjaFlags = [ "duckdb_local_extension_repo" ];
 
       cmakeFlags = appendAttr "cmakeFlags" [
         "-DBUILD_SHELL=0"
@@ -70,7 +64,9 @@ lib.extendMkDerivation {
       ];
 
       installPhase = ''
+        runHook preInstall
         find ./repository -type f -exec install -Dm 0755 "{}" "$out/{}" \;
+        runHook postInstall
       '';
     };
 }
