@@ -37,30 +37,9 @@ stdenv.mkDerivation {
     "dev"
   ];
 
+  # Move static libraries to dev output + update their paths in cmake files
   postInstall = ''
+    find $out -name '*.a' -exec bash -c 'sed -i "s|$1|''${1/$out/$dev}|g" '$out'/lib/cmake/**/*.cmake' x {} \;
     moveToOutput "lib/*.a" "$dev"
-  '';
-
-  postFixup = ''
-    files=(
-      "$dev/lib/cmake/DuckDB/DuckDBExports-release.cmake"
-      "$dev/lib/cmake/DuckDB/DuckDBExports.cmake"
-    )
-
-    # Escape values before interpolating them into a sed regex/replacement.
-    outRe=$(printf '%s' "$out" | sed -e 's/[.[\*^$()+?{}|\\]/\\&/g')
-    devRep=$(printf '%s' "$dev" | sed -e 's/[&@\\]/\\&/g')
-
-    for f in "''${files[@]}"; do
-      sed -E -i \
-        "s@''${outRe}(/[^\"';[:space:]]+\.a)@''${devRep}\1@g" \
-        "$f"
-
-      # Optional: fail if any .a references to $out remain.
-      if grep -nE "''${outRe}/[^\"';[:space:]]+\.a" "$f"; then
-        echo "failed to rewrite all .a references from $out to $dev in $f" >&2
-        exit 1
-      fi
-    done
   '';
 }

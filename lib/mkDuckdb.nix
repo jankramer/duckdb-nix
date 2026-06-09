@@ -3,7 +3,6 @@
   duckdb-src,
   duckdb-core,
   duckdb-java,
-  extensions,
   lib,
   jdk_headless,
   makeWrapper,
@@ -12,12 +11,13 @@
   symlinkJoin,
   python3,
 }:
-{ configuredExtensions, withJdbc }:
+
+{ extensions, withJdbc }:
 
 let
   repository = symlinkJoin {
     name = "duckdb-${duckdb-src.version}-extension-repository";
-    paths = configuredExtensions;
+    paths = extensions;
   };
 
   autoloadFlagsForExt =
@@ -26,7 +26,7 @@ let
     ++ (map (p: "--extension_file_postfixes ${ext.extensionName}=${p}") ext.filePostfixes);
 
   autoloaderFlags = builtins.concatStringsSep " " (
-    builtins.concatMap autoloadFlagsForExt configuredExtensions
+    builtins.concatMap autoloadFlagsForExt extensions
   );
 
   sharedLib = name: "${name}${stdenv.hostPlatform.extensions.sharedLibrary}";
@@ -51,15 +51,15 @@ stdenv.mkDerivation {
   ];
 
   postPatch = ''
-    ${python3}/bin/python3 scripts/generate_extensions_function.py \
+    ${python3}/bin/python3 ${../scripts/generate_extensions_function.py} \
+      --shell "${duckdb-core}/bin/duckdb" \
       --extension_repository "${repository}/repository" \
-      ${autoloaderFlags} \
-      --shell "${duckdb-core}/bin/duckdb"
+      ${autoloaderFlags}
   '';
 
   buildPhase = ''
     runHook preBuild
-    cmake --build . --target duckdb_extension_entries
+    cmake --build . --target duckdb_autoload_config
     runHook postBuild
   '';
 
@@ -68,7 +68,7 @@ stdenv.mkDerivation {
 
     install -Dm755 ${duckdb-core}/bin/duckdb $out/bin/duckdb
     ${installLib "${duckdb-core}/lib" "libduckdb"}
-    ${installLib "src/main/extension" "libduckdb_extension_entries"}
+    ${installLib "src/main/extension" "libduckdb_autoload_config"}
 
     ${lib.optionalString withJdbc ''
       ${installLib "${duckdb-java}/lib" "libduckdb_java"}

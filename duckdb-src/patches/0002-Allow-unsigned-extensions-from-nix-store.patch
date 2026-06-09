@@ -1,28 +1,25 @@
-From a36c403d9f89fe31864d2719bc5c7694341025d2 Mon Sep 17 00:00:00 2001
+From cfb757f384c7550fb596af92ccddc6cdc78f2655 Mon Sep 17 00:00:00 2001
 From: Jan Kramer <jan@jankramer.eu>
 Date: Sat, 6 Jun 2026 07:00:17 +0200
-Subject: [PATCH 2/3] Allow unsigned extensions from /nix/store when enabled
+Subject: [PATCH 2/3] Allow unsigned extensions from /nix/store
 
 ---
- src/main/extension/extension_load.cpp | 11 +++++++++--
- 1 file changed, 9 insertions(+), 2 deletions(-)
+ src/main/extension/extension_load.cpp | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
 
 diff --git a/src/main/extension/extension_load.cpp b/src/main/extension/extension_load.cpp
 index 50f95a2bb4..5780930c7e 100644
 --- a/src/main/extension/extension_load.cpp
 +++ b/src/main/extension/extension_load.cpp
-@@ -483,8 +483,15 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
+@@ -483,8 +483,12 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
  	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
  		bool signature_valid;
  		if (parsed_metadata.AppearsValid()) {
 -			bool allow_community_extensions = Settings::Get<AllowCommunityExtensionsSetting>(db);
 -			signature_valid = CheckExtensionSignature(*handle, parsed_metadata, allow_community_extensions);
-+#ifdef DUCKDB_ALLOW_UNSIGNED_NIX_STORE_EXTENSIONS
 +			if (handle->path.rfind("/nix/store/", 0) == 0) {
 +				signature_valid = true;
-+			} else
-+#endif
-+			{
++			} else {
 +				bool allow_community_extensions = Settings::Get<AllowCommunityExtensionsSetting>(db);
 +				signature_valid = CheckExtensionSignature(*handle, parsed_metadata, allow_community_extensions);
 +			}
@@ -31,3 +28,4 @@ index 50f95a2bb4..5780930c7e 100644
  		}
 -- 
 2.53.0
+

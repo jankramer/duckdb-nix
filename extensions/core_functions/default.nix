@@ -2,8 +2,6 @@
   fetchFromGitHub,
   mkExtension,
   lib,
-
-  croaring
 }:
 
 mkExtension {

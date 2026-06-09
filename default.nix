@@ -48,28 +48,30 @@ let
         self.extensions.core_functions
         self.extensions.parquet
         self.extensions.httpfs
+        self.extensions.gcs
         self.extensions.icu
         self.extensions.json
     ];
 
     default = self.mkDuckdb {
-      configuredExtensions = self.defaultExtensions;
+      extensions = self.defaultExtensions;
       withJdbc = true;
     };
 
     withExtensions =
       selectFn:
       self.mkDuckdb {
-        configuredExtensions = selectFn self.extensions;
+        extensions = selectFn self.extensions;
         withJdbc = true;
       };
   });
 in
 scope.default.overrideAttrs (previousAttrs: {
   passthru = (previousAttrs.passthru or { }) // {
-    inherit (scope) withExtensions mkExtension extensions defaultExtensionNames defaultExtensions;
+    inherit (scope) withExtensions mkExtension extensions defaultExtensions;
 
     src = scope.duckdb-src;
     core = scope.duckdb-core;
+    jdbc = scope.duckdb-java;
   };
 })

@@ -1,1003 +1,22 @@
-From 5248e2c47a7b1bd4c3345118ad76b2ad5a29f5b9 Mon Sep 17 00:00:00 2001
+From 270b958498d5eb476de15d595b5ad1c135ae631a Mon Sep 17 00:00:00 2001
 From: Jan Kramer <jan@jankramer.eu>
-Date: Sat, 6 Jun 2026 06:59:34 +0200
-Subject: [PATCH 1/3] Move extension entries into shared library
+Date: Mon, 8 Jun 2026 18:18:59 +0200
+Subject: [PATCH 1/3] Move autoload config into shared library
 
 ---
- CMakeLists.txt                                |    2 +-
- Makefile                                      |   10 +
- scripts/generate_extensions_function.py       |  625 ++++----
  src/CMakeLists.txt                            |    6 +-
- src/include/duckdb/main/extension_entries.hpp | 1389 ++---------------
- src/include/duckdb/main/extension_helper.hpp  |   39 +-
+ src/include/duckdb/main/extension_entries.hpp | 1384 ++---------------
+ src/include/duckdb/main/extension_helper.hpp  |   36 +-
  src/main/extension/CMakeLists.txt             |    8 +-
  src/main/extension/extension_entries.cpp      |  142 ++
  .../extension/extension_entries_generated.cpp | 1316 ++++++++++++++++
  src/main/extension/extension_install.cpp      |   10 +-
- 10 files changed, 1992 insertions(+), 1555 deletions(-)
+ 7 files changed, 1617 insertions(+), 1285 deletions(-)
  create mode 100644 src/main/extension/extension_entries.cpp
  create mode 100644 src/main/extension/extension_entries_generated.cpp
 
-diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 04d9defde5..b5945024b2 100644
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -452,7 +452,7 @@ endif()
- option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
- option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
- option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
--option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
-+option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries_generated.cpp" FALSE)
- option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
- option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
- option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
-diff --git a/Makefile b/Makefile
-index acd13dd574..fa5ff64c84 100644
---- a/Makefile
-+++ b/Makefile
-@@ -192,6 +192,9 @@ endif
- ifneq ($(EXTENSION_CONFIGS),)
- 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS="$(EXTENSION_CONFIGS)"
- endif
-+ifneq ($(EXTENSION_DIRECTORIES),)
-+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_DIRECTORIES="$(EXTENSION_DIRECTORIES)"
-+endif
- ifeq ($(EXTENSION_TESTS_ONLY), 1)
- 	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_TESTS_ONLY=1
- endif
-@@ -355,6 +358,13 @@ release: ${EXTENSION_CONFIG_STEP}
- 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
- 	cmake --build . --config Release
- 
-+.PHONY: extension_entries
-+extension_entries: ${EXTENSION_CONFIG_STEP}
-+	mkdir -p ./build/release && \
-+	cd build/release && \
-+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
-+	cmake --build . --target duckdb_extension_entries --config Release
-+
- wasm_mvp: ${EXTENSION_CONFIG_STEP}
- 	mkdir -p ./build/wasm_mvp && \
- 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM="wasm_mvp" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
-diff --git a/scripts/generate_extensions_function.py b/scripts/generate_extensions_function.py
-index b5b1491fd7..52d63f41e6 100644
---- a/scripts/generate_extensions_function.py
-+++ b/scripts/generate_extensions_function.py
-@@ -1,24 +1,20 @@
- import os
--import csv
- import re
- import argparse
- import glob
--from typing import Set, Tuple, cast
--import pathlib
--from typing import NamedTuple
--from typing import List, Dict
-+from typing import Set, Tuple, NamedTuple, List, Dict, Optional
- import json
- 
- os.chdir(os.path.join(os.path.dirname(__file__), '..'))
- 
- # Example usage:
- 
--parser = argparse.ArgumentParser(description='Generates/Validates extension_functions.hpp file')
-+parser = argparse.ArgumentParser(description='Generates/Validates extension_entries_generated.cpp file')
- 
- parser.add_argument(
-     '--validate',
-     action=argparse.BooleanOptionalAction,
--    help='If set will validate that extension_entries.hpp is up to date, otherwise it generates the extension_functions.hpp file.',
-+    help='If set will validate that extension_entries_generated.cpp is up to date, otherwise it generates the file.',
- )
- parser.add_argument(
-     '--extension_repository',
-@@ -35,15 +31,33 @@ parser.add_argument(
- parser.add_argument(
-     '--extensions',
-     action='store',
--    help="Comma separated list of extensions - if not provided this is read from the extension configuration",
-+    help="Comma separated list of extensions - if not provided this is read from the extension repository",
-     default='',
- )
-+parser.add_argument(
-+    '--extension_file_prefixes',
-+    action='append',
-+    help="Comma separated list of extension=prefix entries to add to EXTENSION_FILE_PREFIXES",
-+    default=[],
-+)
-+parser.add_argument(
-+    '--extension_file_postfixes',
-+    action='append',
-+    help="Comma separated list of extension=postfix entries to add to EXTENSION_FILE_POSTFIXES",
-+    default=[],
-+)
-+parser.add_argument(
-+    '--extension_file_contains',
-+    action='append',
-+    help="Comma separated list of extension=substring entries to add to EXTENSION_FILE_CONTAINS",
-+    default=[],
-+)
- 
- args = parser.parse_args()
- 
--EXTENSIONS_PATH = os.path.join("build", "extension_configuration", "extensions.csv")
--DUCKDB_PATH = os.path.join(*args.shell.split('/'))
--HEADER_PATH = os.path.join("src", "include", "duckdb", "main", "extension_entries.hpp")
-+DUCKDB_PATH = args.shell
-+GENERATED_SOURCE_PATH = os.path.join("src", "main", "extension", "extension_entries_generated.cpp")
-+EXTENSION_PATHS: Optional[Dict[str, str]] = None
- 
- EXTENSION_DEPENDENCIES = {
-     'iceberg': [
-@@ -135,6 +149,39 @@ def parse_records(text):
-     return records
- 
- 
-+def parse_string_array(text: str) -> Set[str]:
-+    return set(re.findall(r'"([^"]+)"', text))
-+
-+
-+def parse_extension_entry_argument(argument_name: str, argument_values) -> Dict[str, str]:
-+    result: Dict[str, str] = {}
-+    if isinstance(argument_values, str):
-+        argument_values = [argument_values]
-+    if len(argument_values) == 0:
-+        return result
-+
-+    for argument_value in argument_values:
-+        for raw_entry in argument_value.split(','):
-+            entry = raw_entry.strip()
-+            if len(entry) == 0:
-+                continue
-+            if '=' not in entry:
-+                print(f"Invalid {argument_name} entry '{entry}', expected extension=pattern")
-+                exit(1)
-+            extension, pattern = entry.split('=', 1)
-+            extension = extension.strip().lower()
-+            pattern = pattern.strip().lower()
-+            if len(extension) == 0 or len(pattern) == 0:
-+                print(f"Invalid {argument_name} entry '{entry}', expected extension=pattern")
-+                exit(1)
-+            result[pattern] = extension
-+    return result
-+
-+
-+def cpp_string_literal(value: str) -> str:
-+    return json.dumps(value)
-+
-+
- class LogicalType(NamedTuple):
-     type: str
- 
-@@ -189,52 +236,28 @@ class ExtensionFunction(NamedTuple):
-         return output
- 
- 
--class ExtensionSetting(NamedTuple):
-+class ExtensionEntryData(NamedTuple):
-     extension: str
-     name: str
- 
-     @staticmethod
--    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionSetting"]:
--        output: Dict[str, "ExtensionSetting"] = {}
-+    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionEntryData"]:
-+        output: Dict[str, "ExtensionEntryData"] = {}
-         for x in input:
--            output[x[0]] = ExtensionSetting(x[1], x[0])
-+            output[x[0]] = ExtensionEntryData(x[1], x[0])
-         return output
- 
- 
--class ExtensionSecretType(NamedTuple):
--    extension: str
--    name: str
-+def parse_cpp_records(file_blob: str, var_name: str):
-+    return parse_records(get_slice_of_file(var_name, file_blob))
- 
--    @staticmethod
--    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionSecretType"]:
--        output: Dict[str, "ExtensionSecretType"] = {}
--        for x in input:
--            output[x[0]] = ExtensionSecretType(x[1], x[0])
--        return output
- 
-+def parse_cpp_entry_data(file_blob: str, var_name: str) -> Dict[str, ExtensionEntryData]:
-+    return ExtensionEntryData.create_map([(x[0], x[1]) for x in parse_cpp_records(file_blob, var_name)])
- 
--class ExtensionCopyFunction(NamedTuple):
--    extension: str
--    name: str
- 
--    @staticmethod
--    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionCopyFunction"]:
--        output: Dict[str, "ExtensionCopyFunction"] = {}
--        for x in input:
--            output[x[0]] = ExtensionCopyFunction(x[1], x[0])
--        return output
--
--
--class ExtensionType(NamedTuple):
--    extension: str
--    name: str
--
--    @staticmethod
--    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionType"]:
--        output: Dict[str, "ExtensionType"] = {}
--        for x in input:
--            output[x[0]] = ExtensionType(x[1], x[0])
--        return output
-+def parse_cpp_entry_map(file_blob: str, var_name: str) -> Dict[str, str]:
-+    return {x[0]: x[1] for x in parse_cpp_records(file_blob, var_name)}
- 
- 
- class ParsedEntries:
-@@ -244,47 +267,28 @@ class ParsedEntries:
-         self.function_overloads = {}
-         self.settings = {}
-         self.secret_types = {}
--        self.types = {}
--        self.copy_functions = {}
--
--        file = open(file_path, 'r')
--        file_blob = file.read()
--
--        # Get the extension functions
--        ext_functions_file_blob = get_slice_of_file("EXTENSION_FUNCTIONS", file_blob)
--        res = parse_records(ext_functions_file_blob)
--        res = [(x[0], x[1], x[2]) for x in res]
--        self.functions = ExtensionFunction.create_map(res)
--
--        # Get the extension function overloads
--        ext_function_overloads_file_blob = get_slice_of_file("EXTENSION_FUNCTION_OVERLOADS", file_blob)
--        res = parse_records(ext_function_overloads_file_blob)
--        res = [(x[0], x[1], x[2], x[3]) for x in res]
--        self.function_overloads = ExtensionFunctionOverload.create_map(res)
--
--        # Get the extension settings
--        ext_settings_file_blob = get_slice_of_file("EXTENSION_SETTINGS", file_blob)
--        res = parse_records(ext_settings_file_blob)
--        res = [(x[0], x[1]) for x in res]
--        self.settings = ExtensionSetting.create_map(res)
--
--        # Get the extension secret types
--        ext_secret_types_file_blob = get_slice_of_file("EXTENSION_SECRET_TYPES", file_blob)
--        res = parse_records(ext_secret_types_file_blob)
--        res = [(x[0], x[1]) for x in res]
--        self.secret_types = ExtensionSecretType.create_map(res)
--
--        # Get the extension types
--        ext_copy_functions_blob = get_slice_of_file("EXTENSION_COPY_FUNCTIONS", file_blob)
--        res = parse_records(ext_copy_functions_blob)
--        res = [(x[0], x[1]) for x in res]
--        self.copy_functions = ExtensionCopyFunction.create_map(res)
--
--        # Get the extension types
--        ext_types_file_blob = get_slice_of_file("EXTENSION_TYPES", file_blob)
--        res = parse_records(ext_types_file_blob)
--        res = [(x[0], x[1]) for x in res]
--        self.types = ExtensionType.create_map(res)
-+        self.file_prefixes = {}
-+        self.file_postfixes = {}
-+        self.file_contains = {}
-+        self.autoloadable_extensions = set()
-+
-+        with open(file_path, 'r') as file:
-+            file_blob = file.read()
-+
-+        self.functions = ExtensionFunction.create_map(
-+            [(x[0], x[1], x[2]) for x in parse_cpp_records(file_blob, "EXTENSION_FUNCTIONS")]
-+        )
-+        self.function_overloads = ExtensionFunctionOverload.create_map(
-+            [(x[0], x[1], x[2], x[3]) for x in parse_cpp_records(file_blob, "EXTENSION_FUNCTION_OVERLOADS")]
-+        )
-+        self.settings = parse_cpp_entry_data(file_blob, "EXTENSION_SETTINGS")
-+        self.secret_types = parse_cpp_entry_data(file_blob, "EXTENSION_SECRET_TYPES")
-+        self.file_prefixes = parse_cpp_entry_map(file_blob, "EXTENSION_FILE_PREFIXES")
-+        self.file_postfixes = parse_cpp_entry_map(file_blob, "EXTENSION_FILE_POSTFIXES")
-+        self.file_contains = parse_cpp_entry_map(file_blob, "EXTENSION_FILE_CONTAINS")
-+
-+        ext_autoloadable_extensions_blob = get_slice_of_file("AUTOLOADABLE_EXTENSIONS", file_blob)
-+        self.autoloadable_extensions = parse_string_array(ext_autoloadable_extensions_blob)
- 
-     def strip_unloaded_extensions(self, extensions: List[str], functions):
-         return [x for x in functions if x.extension not in extensions]
-@@ -296,10 +300,12 @@ class ParsedEntries:
-             for k, v in self.function_overloads.items()
-             if len(self.strip_unloaded_extensions(extensions, v)) > 0
-         }
--        self.copy_functions = {k: v for k, v in self.copy_functions.items() if v.extension not in extensions}
-         self.settings = {k: v for k, v in self.settings.items() if v.extension not in extensions}
-         self.secret_types = {k: v for k, v in self.secret_types.items() if v.extension not in extensions}
--        self.types = {k: v for k, v in self.types.items() if v.extension not in extensions}
-+        self.file_prefixes = {k: v for k, v in self.file_prefixes.items() if v not in extensions}
-+        self.file_postfixes = {k: v for k, v in self.file_postfixes.items() if v not in extensions}
-+        self.file_contains = {k: v for k, v in self.file_contains.items() if v not in extensions}
-+        self.autoloadable_extensions = {x for x in self.autoloadable_extensions if x not in extensions}
- 
- 
- def check_prerequisites():
-@@ -309,30 +315,19 @@ def check_prerequisites():
-             "please run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
-         )
-         exit(1)
--    if len(args.extensions) == 0 and not os.path.isfile(EXTENSIONS_PATH):
--        print(f"{EXTENSIONS_PATH} not found and --extensions it not set")
--        print("Either:")
--        print(
--            "* run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
--        )
--        print("* Specify a comma separated list of extensions using --extensions")
--        exit(1)
-     if not os.path.isdir(args.extension_repository):
-         print(f"provided --extension_repository '{args.extension_repository}' is not a valid directory")
-         exit(1)
- 
- 
--# Parses the extension config files for which extension names there are to be expected
-+# Gets the extensions to inspect. If --extensions is omitted, scan the configured extension repository.
- def get_extension_names() -> List[str]:
-     if len(args.extensions) > 0:
--        return args.extensions.split(',')
--    extension_names = []
--    with open(EXTENSIONS_PATH) as f:
--        # Skip the csv header
--        next(f)
--        for line in f:
--            extension_name = line.split(',')[0].rstrip()
--            extension_names.append(extension_name)
-+        return [extension.strip() for extension in args.extensions.split(',') if extension.strip()]
-+    extension_names = sorted(get_extension_path_map().keys())
-+    if not extension_names:
-+        print(f"No .duckdb_extension files found in --extension_repository '{args.extension_repository}'")
-+        exit(1)
-     return extension_names
- 
- 
-@@ -361,7 +356,7 @@ def transform_parameter(parameter) -> LogicalType:
-         return LogicalType("INVALID")
-     parameter = parameter.upper()
-     if parameter.endswith('[]'):
--        return LogicalType(transform_parameter(parameter[0 : len(parameter) - 2]).type + '[]')
-+        return LogicalType(transform_parameter(parameter[0: len(parameter) - 2]).type + '[]')
-     if parameter in parameter_type_map:
-         return LogicalType(parameter_type_map[parameter])
-     return LogicalType(parameter)
-@@ -374,14 +369,13 @@ def transform_parameters(parameters) -> FunctionOverload:
- 
- def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverload]]):
-     GET_FUNCTIONS_QUERY = """
--        select distinct
--            function_name,
--            function_type,
--            parameter_types,
--            return_type
--        from duckdb_functions()
--        ORDER BY function_name, function_type;
--    """
-+                          select distinct function_name,
-+                                          function_type,
-+                                          parameter_types,
-+                                          return_type
-+                          from duckdb_functions()
-+                          ORDER BY function_name, function_type; \
-+                          """
-     # ['name_1,type_1', ..., 'name_n,type_n']
-     results = get_query(GET_FUNCTIONS_QUERY, load)
- 
-@@ -409,10 +403,9 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
- 
- def get_settings(load="") -> Set[str]:
-     GET_SETTINGS_QUERY = """
--        select distinct
--            name
--        from duckdb_settings();
--    """
-+                         select distinct name
-+                         from duckdb_settings(); \
-+                         """
-     settings = get_query(GET_SETTINGS_QUERY, load)
-     res = set()
-     for setting in settings:
-@@ -423,10 +416,9 @@ def get_settings(load="") -> Set[str]:
- 
- def get_secret_types(load="") -> Set[str]:
-     GET_SECRET_TYPES_QUERY = """
--        select distinct
--            type
--        from duckdb_secret_types();
--    """
-+                             select distinct type
-+                             from duckdb_secret_types(); \
-+                             """
-     secret_types = get_query(GET_SECRET_TYPES_QUERY, load)
-     res = set()
-     for secret_type in secret_types:
-@@ -435,14 +427,83 @@ def get_secret_types(load="") -> Set[str]:
-     return res
- 
- 
-+HARDCODED_FILE_PREFIXES = {
-+    "http://": "httpfs",
-+    "https://": "httpfs",
-+    "s3://": "httpfs",
-+    "s3a://": "httpfs",
-+    "s3n://": "httpfs",
-+    "gcs://": "httpfs",
-+    "gs://": "httpfs",
-+    "r2://": "httpfs",
-+    "azure://": "azure",
-+    "az://": "azure",
-+    "abfss://": "azure",
-+    "hf://": "httpfs",
-+}
-+
-+HARDCODED_FILE_POSTFIXES = {
-+    ".parquet": "parquet",
-+    ".json": "json",
-+    ".jsonl": "json",
-+    ".ndjson": "json",
-+    ".shp": "spatial",
-+    ".gpkg": "spatial",
-+    ".fgb": "spatial",
-+    ".xlsx": "excel",
-+    ".avro": "avro",
-+}
-+
-+HARDCODED_FILE_CONTAINS = {
-+    ".parquet?": "parquet",
-+    ".json?": "json",
-+    ".ndjson?": "json",
-+    ".jsonl?": "json",
-+}
-+
-+HARDCODED_AUTOLOADABLE_EXTENSIONS = {
-+    "autocomplete",
-+    "avro",
-+    "aws",
-+    "azure",
-+    "core_functions",
-+    "delta",
-+    "ducklake",
-+    "encodings",
-+    "excel",
-+    "fts",
-+    "httpfs",
-+    "iceberg",
-+    "icu",
-+    "inet",
-+    "json",
-+    "motherduck",
-+    "mysql_scanner",
-+    "parquet",
-+    "postgres_scanner",
-+    "quack",
-+    "sqlite_scanner",
-+    "sqlsmith",
-+    "tpcds",
-+    "tpch",
-+    "ui",
-+    "unity_catalog",
-+}
-+
-+
- class ExtensionData:
-     def __init__(self):
-         # Map of extension -> ExtensionFunction
-         self.function_map: Dict[Function, ExtensionFunction] = {}
--        # Map of extension -> ExtensionSetting
--        self.settings_map: Dict[str, ExtensionSetting] = {}
--        # Map of extension -> ExtensionSecretType
--        self.secret_types_map: Dict[str, ExtensionSecretType] = {}
-+        self.settings_map: Dict[str, ExtensionEntryData] = {}
-+        self.secret_types_map: Dict[str, ExtensionEntryData] = {}
-+        self.file_prefixes_map: Dict[str, str] = dict(HARDCODED_FILE_PREFIXES)
-+        self.file_postfixes_map: Dict[str, str] = dict(HARDCODED_FILE_POSTFIXES)
-+        self.file_contains_map: Dict[str, str] = dict(HARDCODED_FILE_CONTAINS)
-+        self.priority_file_prefixes: Dict[str, str] = {}
-+        self.priority_file_postfixes: Dict[str, str] = {}
-+        self.priority_file_contains: Dict[str, str] = {}
-+        self.autoloadable_extensions: Set[str] = set(HARDCODED_AUTOLOADABLE_EXTENSIONS)
-         # Map of function -> extension function overloads
-         self.function_overloads: Dict[Function, List[ExtensionFunctionOverload]] = {}
-         # All function overloads (also ones that will not be written to the file)
-@@ -466,6 +527,7 @@ class ExtensionData:
-             'spatial': [],
-         }
-         self.stored_settings: Dict[str, List[str]] = {'arrow': [], 'spatial': []}
-+        self.stored_secret_types: Dict[str, List[str]] = {'arrow': [], 'spatial': []}
- 
-     def set_base(self):
-         (functions, function_overloads) = get_functions()
-@@ -478,6 +540,23 @@ class ExtensionData:
-         self.function_overloads.update(entries.function_overloads)
-         self.settings_map.update(entries.settings)
-         self.secret_types_map.update(entries.secret_types)
-+        self.file_prefixes_map.update(entries.file_prefixes)
-+        self.file_postfixes_map.update(entries.file_postfixes)
-+        self.file_contains_map.update(entries.file_contains)
-+        self.autoloadable_extensions.update(entries.autoloadable_extensions)
-+
-+    def add_file_entry_overrides(
-+        self, prefixes: Dict[str, str], postfixes: Dict[str, str], contains: Dict[str, str]
-+    ):
-+        self.file_prefixes_map.update(prefixes)
-+        self.file_postfixes_map.update(postfixes)
-+        self.file_contains_map.update(contains)
-+        self.priority_file_prefixes.update(prefixes)
-+        self.priority_file_postfixes.update(postfixes)
-+        self.priority_file_contains.update(contains)
-+        self.autoloadable_extensions.update(prefixes.values())
-+        self.autoloadable_extensions.update(postfixes.values())
-+        self.autoloadable_extensions.update(contains.values())
- 
-     def load_dependencies(self, extension_name: str) -> str:
-         if extension_name not in EXTENSION_DEPENDENCIES:
-@@ -532,6 +611,7 @@ Please double check if '{args.extension_repository}' is the right location to lo
-             print(error)
-             exit(1)
-         self.added_extensions.add(extension_name)
-+        self.autoloadable_extensions.add(extension_name.lower())
- 
-     def add_settings(self, extension_name: str, settings_list: List[str]):
-         extension_name = extension_name.lower()
-@@ -548,10 +628,10 @@ Please double check if '{args.extension_repository}' is the right location to lo
- 
-         self.extension_settings[extension_name] = added_settings
- 
--        settings_to_add: Dict[str, ExtensionSetting] = {}
-+        settings_to_add: Dict[str, ExtensionEntryData] = {}
-         for setting in added_settings:
-             setting_name = setting.lower()
--            settings_to_add[setting_name] = ExtensionSetting(extension_name, setting_name)
-+            settings_to_add[setting_name] = ExtensionEntryData(extension_name, setting_name)
- 
-         self.settings_map.update(settings_to_add)
- 
-@@ -570,15 +650,15 @@ Please double check if '{args.extension_repository}' is the right location to lo
- 
-         self.extension_secret_types[extension_name] = added_secret_types
- 
--        secret_types_to_add: Dict[str, ExtensionSecretType] = {}
-+        secret_types_to_add: Dict[str, ExtensionEntryData] = {}
-         for secret_type in added_secret_types:
-             secret_type_name = secret_type.lower()
--            secret_types_to_add[secret_type_name] = ExtensionSecretType(extension_name, secret_type_name)
-+            secret_types_to_add[secret_type_name] = ExtensionEntryData(extension_name, secret_type_name)
- 
-         self.secret_types_map.update(secret_types_to_add)
- 
-     def get_extension_overloads(
--        self, extension_name: str, overloads: Dict[Function, List[FunctionOverload]]
-+            self, extension_name: str, overloads: Dict[Function, List[FunctionOverload]]
-     ) -> Dict[Function, List[ExtensionFunctionOverload]]:
-         result = {}
-         for function, function_overloads in overloads.items():
-@@ -593,7 +673,7 @@ Please double check if '{args.extension_repository}' is the right location to lo
-         return result
- 
-     def add_functions(
--        self, extension_name: str, function_list: List[Function], overloads: Dict[Function, List[FunctionOverload]]
-+            self, extension_name: str, function_list: List[Function], overloads: Dict[Function, List[FunctionOverload]]
-     ):
-         extension_name = extension_name.lower()
- 
-@@ -628,24 +708,27 @@ Please double check if '{args.extension_repository}' is the right location to lo
-         self.function_map.update(functions_to_add)
- 
-     def validate(self):
--        parsed_entries = ParsedEntries(HEADER_PATH)
--        if self.function_map != parsed_entries.functions:
--            print("Function map mismatches:")
--            print_map_diff(self.function_map, parsed_entries.functions)
--            exit(1)
--        if self.settings_map != parsed_entries.settings:
--            print("Settings map mismatches:")
--            print_map_diff(self.settings_map, parsed_entries.settings)
--            exit(1)
--        if self.secret_types_map != parsed_entries.secret_types:
--            print("SecretTypes map mismatches:")
--            print_map_diff(self.secret_types_map, parsed_entries.secret_types)
-+        parsed_entries = ParsedEntries(GENERATED_SOURCE_PATH)
-+        validate_map("Function map", self.function_map, parsed_entries.functions)
-+        validate_map("Settings map", self.settings_map, parsed_entries.settings)
-+        validate_map("SecretTypes map", self.secret_types_map, parsed_entries.secret_types)
-+        validate_map("File prefix map", self.file_prefixes_map, parsed_entries.file_prefixes)
-+        validate_map("File postfix map", self.file_postfixes_map, parsed_entries.file_postfixes)
-+        validate_map("File contains map", self.file_contains_map, parsed_entries.file_contains)
-+        if self.autoloadable_extensions != parsed_entries.autoloadable_extensions:
-+            print("Autoloadable extension list mismatches:")
-+            print("Diff between lists: " + str(self.autoloadable_extensions - parsed_entries.autoloadable_extensions))
-+            print("Diff between lists: " + str(parsed_entries.autoloadable_extensions - self.autoloadable_extensions))
-             exit(1)
- 
-         print("All entries found: ")
-         print(" > functions: " + str(len(parsed_entries.functions)))
-         print(" > settings:  " + str(len(parsed_entries.settings)))
-         print(" > secret_types:  " + str(len(parsed_entries.secret_types)))
-+        print(" > file_prefixes:  " + str(len(parsed_entries.file_prefixes)))
-+        print(" > file_postfixes:  " + str(len(parsed_entries.file_postfixes)))
-+        print(" > file_contains:  " + str(len(parsed_entries.file_contains)))
-+        print(" > autoloadable_extensions:  " + str(len(parsed_entries.autoloadable_extensions)))
- 
-     def verify_export(self):
-         if len(self.function_map) == 0 or len(self.settings_map) == 0 or len(self.secret_types_map) == 0:
-@@ -659,7 +742,7 @@ This is likely caused by building DuckDB with extensions linked in
- 
-     def export_functions(self) -> str:
-         result = """
--static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {\n"""
-+static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS_DATA[] = {\n"""
-         sorted_function = sorted(self.function_map)
- 
-         for func in sorted_function:
-@@ -672,7 +755,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {\n"""
- 
-     def export_function_overloads(self) -> str:
-         result = """
--static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] = {\n"""
-+static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS_DATA[] = {\n"""
-         sorted_function = sorted(self.function_overloads)
- 
-         for func in sorted_function:
-@@ -688,30 +771,55 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
-         result += "}; // END_OF_EXTENSION_FUNCTION_OVERLOADS\n"
-         return result
- 
--    def export_settings(self) -> str:
--        result = """
--static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {\n"""
--        sorted_settings = sorted(self.settings_map)
--
--        for settings_name in sorted_settings:
--            setting: ExtensionSetting = self.settings_map[settings_name]
-+    def export_extension_entries(self, name: str, entries: Dict[str, ExtensionEntryData]) -> str:
-+        result = f"""
-+static constexpr ExtensionEntry {name}_DATA[] = {{\n"""
-+        for entry_name in sorted(entries):
-+            entry = entries[entry_name]
-             result += "\t{"
--            result += f'"{settings_name.lower()}", "{setting.extension}"'
-+            result += f"{cpp_string_literal(entry_name.lower())}, {cpp_string_literal(entry.extension)}"
-             result += "},\n"
--        result += "}; // END_OF_EXTENSION_SETTINGS\n"
-+        result += f"}}; // END_OF_{name}\n"
-         return result
- 
--    def export_secret_types(self) -> str:
--        result = """
--static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {\n"""
--        sorted_secret_types = sorted(self.secret_types_map)
-+    def export_entry_map(
-+        self,
-+        name: str,
-+        entries: Dict[str, str],
-+        priority_entries: Optional[Dict[str, str]] = None,
-+        priority_last: bool = False,
-+    ) -> str:
-+        result = f"""
-+static constexpr ExtensionEntry {name}_DATA[] = {{\n"""
-+        if priority_entries is None:
-+            priority_entries = {}
-+
-+        sorted_entries = [(entry_name, entries[entry_name]) for entry_name in sorted(entries)]
-+        sorted_priority_entries = [
-+            (entry_name, entries[entry_name]) for entry_name in sorted(priority_entries) if entry_name in entries
-+        ]
-+        non_priority_entries = [
-+            (entry_name, extension) for entry_name, extension in sorted_entries if entry_name not in priority_entries
-+        ]
-+        ordered_entries = (
-+            non_priority_entries + sorted_priority_entries
-+            if priority_last
-+            else sorted_priority_entries + non_priority_entries
-+        )
- 
--        for secret_types_name in sorted_secret_types:
--            secret_type: ExtensionSecretType = self.secret_types_map[secret_types_name]
-+        for entry_name, extension in ordered_entries:
-             result += "\t{"
--            result += f'"{secret_types_name.lower()}", "{secret_type.extension}"'
-+            result += f"{cpp_string_literal(entry_name)}, {cpp_string_literal(extension)}"
-             result += "},\n"
--        result += "}; // END_OF_EXTENSION_SECRET_TYPES\n"
-+        result += f"}}; // END_OF_{name}\n"
-+        return result
-+
-+    def export_autoloadable_extensions(self) -> str:
-+        result = """
-+static constexpr const char *AUTOLOADABLE_EXTENSIONS_DATA[] = {\n"""
-+        for extension_name in sorted(self.autoloadable_extensions):
-+            result += f"\t{cpp_string_literal(extension_name)},\n"
-+        result += "}; // END_OF_AUTOLOADABLE_EXTENSIONS\n"
-         return result
- 
- 
-@@ -719,6 +827,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {\n"""
- def get_slice_of_file(var_name, file_str):
-     begin = file_str.find(var_name)
-     end = file_str.find("END_OF_" + var_name)
-+    if end == -1:
-+        end = file_str.find("}; // " + var_name)
-     return file_str[begin:end]
- 
- 
-@@ -732,14 +842,26 @@ def print_map_diff(d1, d2):
-     print("Diff between maps: " + diff2 + "\n")
- 
- 
-+def validate_map(name: str, actual, expected):
-+    if actual == expected:
-+        return
-+    print(f"{name} mismatches:")
-+    print_map_diff(actual, expected)
-+    exit(1)
-+
-+
- def get_extension_path_map() -> Dict[str, str]:
-+    global EXTENSION_PATHS
-+    if EXTENSION_PATHS is not None:
-+        return EXTENSION_PATHS
-+
-     extension_paths: Dict[str, str] = {}
--    # extension_repository = pathlib.Path('../build/release/repository')
-     extension_repository = args.extension_repository
--    for location in glob.iglob(extension_repository + '/**/*.duckdb_extension', recursive=True):
-+    for location in sorted(glob.iglob(extension_repository + '/**/*.duckdb_extension', recursive=True)):
-         name, _ = os.path.splitext(os.path.basename(location))
-         print(f"Located extension: {name} in path: '{location}'")
-         extension_paths[name] = location
-+    EXTENSION_PATHS = extension_paths
-     return extension_paths
- 
- 
-@@ -747,15 +869,23 @@ def write_header(data: ExtensionData):
-     INCLUDE_HEADER = """//===----------------------------------------------------------------------===//
- //                         DuckDB
- //
--// duckdb/main/extension_entries.hpp
-+// duckdb/main/extension_entries_generated.cpp
- //
- //
- //===----------------------------------------------------------------------===//
- 
--#pragma once
-+#include \"duckdb/main/extension_entries.hpp\"
-+
-+#define DUCKDB_EXTENSION_ENTRY_COUNT(array) (sizeof(array) / sizeof(array[0]))
- 
--#include \"duckdb/common/unordered_map.hpp\"
--#include \"duckdb/common/enums/catalog_type.hpp\"
-+// These fallbacks are necessary if the user doesn't use the CMake build.
-+#ifndef DUCKDB_EXTENSION_DIRECTORIES
-+#ifdef _WIN32
-+#define DUCKDB_EXTENSION_DIRECTORIES \"~\\\\.duckdb\\\\extensions\"
-+#else
-+#define DUCKDB_EXTENSION_DIRECTORIES \"~/.duckdb/extensions\"
-+#endif
-+#endif
- 
- // NOTE: this file is generated by scripts/generate_extensions_function.py.
- // Example usage to refresh one extension (replace "icu" with the desired extension):
-@@ -765,30 +895,12 @@ def write_header(data: ExtensionData):
- // Check out the check-load-install-extensions  job in .github/workflows/LinuxRelease.yml for more details
- 
- namespace duckdb {
--
--struct ExtensionEntry {
--    char name[48];
--    char extension[48];
--};
--
--struct ExtensionFunctionEntry {
--    char name[48];
--    char extension[48];
--    CatalogType type;
--};
--
--struct ExtensionFunctionOverloadEntry {
--    char name[48];
--    char extension[48];
--    CatalogType type;
--    char signature[96];
--};
- """
- 
-     INCLUDE_FOOTER = """
- // Note: these are currently hardcoded in scripts/generate_extensions_function.py
- // TODO: automate by passing though to script via duckdb
--static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
-+static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS_DATA[] = {
-     {"parquet", "parquet"},
-     {"json", "json"},
-     {"avro", "avro"},
-@@ -797,14 +909,14 @@ static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
- 
- // Note: these are currently hardcoded in scripts/generate_extensions_function.py
- // TODO: automate by passing though to script via duckdb
--static constexpr ExtensionEntry EXTENSION_TYPES[] = {
-+static constexpr ExtensionEntry EXTENSION_TYPES_DATA[] = {
-     {"json", "json"},
-     {"inet", "inet"},
- }; // END_OF_EXTENSION_TYPES
- 
- // Note: these are currently hardcoded in scripts/generate_extensions_function.py
- // TODO: automate by passing though to script via duckdb
--static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
-+static constexpr ExtensionEntry EXTENSION_COLLATIONS_DATA[] = {
-     {"af", "icu"},    {"am", "icu"},    {"ar", "icu"},     {"ar_sa", "icu"}, {"as", "icu"},    {"az", "icu"},
-     {"be", "icu"},    {"bg", "icu"},    {"bn", "icu"},     {"bo", "icu"},    {"br", "icu"},    {"bs", "icu"},
-     {"ca", "icu"},    {"ceb", "icu"},   {"chr", "icu"},    {"cs", "icu"},    {"cy", "icu"},    {"da", "icu"},
-@@ -830,38 +942,7 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
- 
- // Note: these are currently hardcoded in scripts/generate_extensions_function.py
- // TODO: automate by passing though to script via duckdb
--static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
--     {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"}, {"s3n://", "httpfs"},
--     {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
--     {"abfss://", "azure"}, {"hf://", "httpfs"}
--}; // END_OF_EXTENSION_FILE_PREFIXES
--
--// Note: these are currently hardcoded in scripts/generate_extensions_function.py
--// TODO: automate by passing though to script via duckdb
--static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
--    {".parquet", "parquet"},
--    {".json", "json"},
--    {".jsonl", "json"},
--    {".ndjson", "json"},
--    {".shp", "spatial"},
--    {".gpkg", "spatial"},
--    {".fgb", "spatial"},
--    {".xlsx", "excel"},
--    {".avro", "avro"},
--}; // END_OF_EXTENSION_FILE_POSTFIXES
--
--// Note: these are currently hardcoded in scripts/generate_extensions_function.py
--// TODO: automate by passing though to script via duckdb
--static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {
--    {".parquet?", "parquet"},
--    {".json?", "json"},
--    {".ndjson?", ".jsonl?"},
--    {".jsonl?", ".ndjson?"}
--}; // EXTENSION_FILE_CONTAINS
--
--// Note: these are currently hardcoded in scripts/generate_extensions_function.py
--// TODO: automate by passing though to script via duckdb
--static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "httpfs"},
-+static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS_DATA[] = {{"s3/config", "httpfs"},
-                                                                 {"gcs/config", "httpfs"},
-                                                                 {"r2/config", "httpfs"},
-                                                                 {"s3/credential_chain", "aws"},
-@@ -880,56 +961,67 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
-                                                                 {"postgres/config", "postgres_scanner"}
- }; // EXTENSION_SECRET_PROVIDERS
- 
--static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
--    "autocomplete",
--    "avro",
--    "aws",
--    "azure",
--    "core_functions",
--    "delta",
--    "ducklake",
--    "encodings",
--    "excel",
--    "fts",
--    "httpfs",
--    "iceberg",
--    "icu",
--    "inet",
--    "json",
--    "motherduck",
--    "mysql_scanner",
--    "parquet",
--    "postgres_scanner",
--    "quack",
--    "sqlite_scanner",
--    "sqlsmith",
--    "tpcds",
--    "tpch",
--    "ui",
--    "unity_catalog"
--}; // END_OF_AUTOLOADABLE_EXTENSIONS
-+extern "C" DUCKDB_EXTENSION_ENTRIES_API const DuckDBExtensionEntriesV1 *duckdb_extension_entries_v1() {
-+    static const DuckDBExtensionEntriesV1 entries = {1,
-+                                                     EXTENSION_FUNCTIONS_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_FUNCTIONS_DATA),
-+                                                     EXTENSION_FUNCTION_OVERLOADS_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_FUNCTION_OVERLOADS_DATA),
-+                                                     EXTENSION_SETTINGS_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_SETTINGS_DATA),
-+                                                     EXTENSION_SECRET_TYPES_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_SECRET_TYPES_DATA),
-+                                                     EXTENSION_COPY_FUNCTIONS_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_COPY_FUNCTIONS_DATA),
-+                                                     EXTENSION_TYPES_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_TYPES_DATA),
-+                                                     EXTENSION_COLLATIONS_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_COLLATIONS_DATA),
-+                                                     EXTENSION_FILE_PREFIXES_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_FILE_PREFIXES_DATA),
-+                                                     EXTENSION_FILE_POSTFIXES_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_FILE_POSTFIXES_DATA),
-+                                                     EXTENSION_FILE_CONTAINS_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_FILE_CONTAINS_DATA),
-+                                                     EXTENSION_SECRET_PROVIDERS_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(EXTENSION_SECRET_PROVIDERS_DATA),
-+                                                     AUTOLOADABLE_EXTENSIONS_DATA,
-+                                                     DUCKDB_EXTENSION_ENTRY_COUNT(AUTOLOADABLE_EXTENSIONS_DATA),
-+                                                     DUCKDB_EXTENSION_DIRECTORIES};
-+    return &entries;
-+}
- 
- } // namespace duckdb"""
- 
-     data.verify_export()
- 
--    file = open(HEADER_PATH, 'w')
--    file.write(INCLUDE_HEADER)
-+    with open(GENERATED_SOURCE_PATH, 'w') as file:
-+        file.write(INCLUDE_HEADER)
-+
-+        exported_functions = data.export_functions()
-+        file.write(exported_functions)
- 
--    exported_functions = data.export_functions()
--    file.write(exported_functions)
-+        exported_overloads = data.export_function_overloads()
-+        file.write(exported_overloads)
- 
--    exported_overloads = data.export_function_overloads()
--    file.write(exported_overloads)
-+        exported_settings = data.export_extension_entries("EXTENSION_SETTINGS", data.settings_map)
-+        file.write(exported_settings)
- 
--    exported_settings = data.export_settings()
--    file.write(exported_settings)
-+        exported_secret_types = data.export_extension_entries("EXTENSION_SECRET_TYPES", data.secret_types_map)
-+        file.write(exported_secret_types)
- 
--    exported_secret_types = data.export_secret_types()
--    file.write(exported_secret_types)
-+        file.write(
-+            data.export_entry_map(
-+                "EXTENSION_FILE_PREFIXES", data.file_prefixes_map, data.priority_file_prefixes, priority_last=True
-+            )
-+        )
-+        file.write(
-+            data.export_entry_map("EXTENSION_FILE_POSTFIXES", data.file_postfixes_map, data.priority_file_postfixes)
-+        )
-+        file.write(data.export_entry_map("EXTENSION_FILE_CONTAINS", data.file_contains_map, data.priority_file_contains))
-+        file.write(data.export_autoloadable_extensions())
- 
--    file.write(INCLUDE_FOOTER)
--    file.close()
-+        file.write(INCLUDE_FOOTER)
- 
- 
- # Extensions that can be autoloaded, but are not buildable by DuckDB CI
-@@ -950,12 +1042,17 @@ def main():
-     extension_data.set_base()
- 
-     # TODO: add 'purge' option to ignore existing entries ??
--    parsed_entries = ParsedEntries(HEADER_PATH)
-+    parsed_entries = ParsedEntries(GENERATED_SOURCE_PATH)
-     parsed_entries.filter_entries(extension_names)
- 
--    # Add the entries we parsed from the HEADER_PATH
-+    # Add the entries we parsed from GENERATED_SOURCE_PATH
-     extension_data.add_entries(parsed_entries)
- 
-+    cli_file_prefixes = parse_extension_entry_argument("--extension_file_prefixes", args.extension_file_prefixes)
-+    cli_file_postfixes = parse_extension_entry_argument("--extension_file_postfixes", args.extension_file_postfixes)
-+    cli_file_contains = parse_extension_entry_argument("--extension_file_contains", args.extension_file_contains)
-+    extension_data.add_file_entry_overrides(cli_file_prefixes, cli_file_postfixes, cli_file_contains)
-+
-     for extension_name in extension_names:
-         print(extension_name)
-         # For every extension, add the functions/settings added by the extension
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 54839de4e9..7eb0a95640 100644
+index 54839de4e9..5a41f32f48 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -94,7 +94,7 @@ foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
@@ -1005,7 +24,7 @@ index 54839de4e9..7eb0a95640 100644
  
  add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
 -target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
-+target_link_libraries(duckdb_static PUBLIC duckdb_extension_entries ${DUCKDB_SYSTEM_LIBS})
++target_link_libraries(duckdb_static PUBLIC duckdb_autoload_config ${DUCKDB_SYSTEM_LIBS})
  link_threads(duckdb_static PUBLIC)
  
  #
@@ -1014,7 +33,7 @@ index 54839de4e9..7eb0a95640 100644
  
  add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
 -target_link_libraries(duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS})
-+target_link_libraries(duckdb PUBLIC duckdb_extension_entries ${DUCKDB_SYSTEM_LIBS})
++target_link_libraries(duckdb PUBLIC duckdb_autoload_config ${DUCKDB_SYSTEM_LIBS})
  link_extension_libraries(duckdb PRIVATE)
  
  link_threads(duckdb PUBLIC)
@@ -1023,20 +42,15 @@ index 54839de4e9..7eb0a95640 100644
  
  install(
 -  TARGETS duckdb duckdb_static
-+  TARGETS duckdb duckdb_static duckdb_extension_entries
++  TARGETS duckdb duckdb_static duckdb_autoload_config
    EXPORT "${DUCKDB_EXPORT_SET}"
    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
 diff --git a/src/include/duckdb/main/extension_entries.hpp b/src/include/duckdb/main/extension_entries.hpp
-index d96910f1ef..c0ba25ea3f 100644
+index d96910f1ef..fd1a2702f6 100644
 --- a/src/include/duckdb/main/extension_entries.hpp
 +++ b/src/include/duckdb/main/extension_entries.hpp
-@@ -3,21 +3,30 @@
- //
- // duckdb/main/extension_entries.hpp
- //
--//
- //===----------------------------------------------------------------------===//
+@@ -8,7 +8,7 @@
  
  #pragma once
  
@@ -1044,16 +58,11 @@ index d96910f1ef..c0ba25ea3f 100644
 +#include "duckdb/common/common.hpp"
  #include "duckdb/common/enums/catalog_type.hpp"
  
--// NOTE: this file is generated by scripts/generate_extensions_function.py.
-+// NOTE: the autoload metadata exposed through this header is generated by scripts/generate_extensions_function.py.
- // Example usage to refresh one extension (replace "icu" with the desired extension):
- // GENERATE_EXTENSION_ENTRIES=1 make debug
- // python3 scripts/generate_extensions_function.py --extensions icu --shell build/debug/duckdb --extension_repository
- // build/debug/repository
+ // NOTE: this file is generated by scripts/generate_extensions_function.py.
+@@ -19,6 +19,16 @@
  
--// Check out the check-load-install-extensions  job in .github/workflows/LinuxRelease.yml for more details
-+// Check out the check-load-install-extensions job in .github/workflows/LinuxRelease.yml for more details
-+
+ // Check out the check-load-install-extensions  job in .github/workflows/LinuxRelease.yml for more details
+ 
 +#ifndef DUCKDB_EXTENSION_ENTRIES_API
 +#if defined(_WIN32) && defined(DUCKDB_EXTENSION_ENTRIES_BUILD)
 +#define DUCKDB_EXTENSION_ENTRIES_API __declspec(dllexport)
@@ -1063,10 +72,11 @@ index d96910f1ef..c0ba25ea3f 100644
 +#define DUCKDB_EXTENSION_ENTRIES_API
 +#endif
 +#endif
- 
++
  namespace duckdb {
  
-@@ -39,1267 +48,137 @@ struct ExtensionFunctionOverloadEntry {
+ struct ExtensionEntry {
+@@ -39,1267 +49,137 @@ struct ExtensionFunctionOverloadEntry {
  	char signature[96];
  };
  
@@ -1896,6 +906,51 @@ index d96910f1ef..c0ba25ea3f 100644
 +
 +	const ExtensionEntry *types;
 +	idx_t types_count;
++
++	const ExtensionEntry *collations;
++	idx_t collations_count;
++
++	const ExtensionEntry *file_prefixes;
++	idx_t file_prefixes_count;
++
++	const ExtensionEntry *file_postfixes;
++	idx_t file_postfixes_count;
++
++	const ExtensionEntry *file_contains;
++	idx_t file_contains_count;
++
++	const ExtensionEntry *secret_providers;
++	idx_t secret_providers_count;
++
++	const char *const *autoloadable_extensions;
++	idx_t autoloadable_extensions_count;
++
++	const char *default_extension_directories;
++};
++
++extern "C" DUCKDB_EXTENSION_ENTRIES_API const DuckDBExtensionEntriesV1 *duckdb_extension_entries_v1();
++
++class ExtensionEntries {
++public:
++	static const DuckDBExtensionEntriesV1 &Get();
++	static const char *DefaultExtensionDirectories();
++};
++
++enum class ExtensionEntryKind : uint8_t {
++	SETTINGS,
++	SECRET_TYPES,
++	COPY_FUNCTIONS,
++	TYPES,
++	COLLATIONS,
++	FILE_PREFIXES,
++	FILE_POSTFIXES,
++	FILE_CONTAINS,
++	SECRET_PROVIDERS
++};
++
++class ExtensionEntryCollection {
++public:
++	typedef ExtensionEntry value_type;
  
 -static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] = {
 -    {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP]>INTERVAL"},
@@ -2114,8 +1169,8 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {"yearweek", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP]>BIGINT"},
 -    {"yearweek", "icu", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMPTZ]>BIGINT"},
 -}; // END_OF_EXTENSION_FUNCTION_OVERLOADS
-+	const ExtensionEntry *collations;
-+	idx_t collations_count;
++	constexpr explicit ExtensionEntryCollection(ExtensionEntryKind kind) : kind(kind) {
++	}
  
 -static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
 -    {"allow_asterisks_in_http_paths", "httpfs"},
@@ -2255,8 +1310,10 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {"whoami_region", "quack"},
 -    {"whoami_started_at", "quack"},
 -}; // END_OF_EXTENSION_SETTINGS
-+	const ExtensionEntry *file_prefixes;
-+	idx_t file_prefixes_count;
++	const ExtensionEntry *begin() const;
++	const ExtensionEntry *end() const;
++	idx_t size() const;
++	const ExtensionEntry &operator[](idx_t index) const;
  
 -static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 -    {"aws", "httpfs"},           {"azure", "azure"},
@@ -2267,8 +1324,8 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {"rds", "postgres_scanner"}, {"s3", "httpfs"},
 -    {"uc", "unity_catalog"},     {"unity_catalog", "unity_catalog"},
 -}; // END_OF_EXTENSION_SECRET_TYPES
-+	const ExtensionEntry *file_postfixes;
-+	idx_t file_postfixes_count;
++private:
++	const ExtensionEntry *data() const;
  
 -// Note: these are currently hardcoded in scripts/generate_extensions_function.py
 -// TODO: automate by passing though to script via duckdb
@@ -2277,8 +1334,13 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {"json", "json"},
 -    {"avro", "avro"},
 -    {"iceberg", "iceberg"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
-+	const ExtensionEntry *file_contains;
-+	idx_t file_contains_count;
++private:
++	ExtensionEntryKind kind;
++};
++
++class ExtensionFunctionEntryCollection {
++public:
++	typedef ExtensionFunctionEntry value_type;
  
 -// Note: these are currently hardcoded in scripts/generate_extensions_function.py
 -// TODO: automate by passing though to script via duckdb
@@ -2286,8 +1348,10 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {"json", "json"},
 -    {"inet", "inet"},
 -}; // END_OF_EXTENSION_TYPES
-+	const ExtensionEntry *secret_providers;
-+	idx_t secret_providers_count;
++	const ExtensionFunctionEntry *begin() const;
++	const ExtensionFunctionEntry *end() const;
++	idx_t size() const;
++	const ExtensionFunctionEntry &operator[](idx_t index) const;
  
 -// Note: these are currently hardcoded in scripts/generate_extensions_function.py
 -// TODO: automate by passing though to script via duckdb
@@ -2314,30 +1378,8 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {"uz", "icu"},    {"vi", "icu"},    {"wae", "icu"},    {"wo", "icu"},    {"xh", "icu"},    {"yi", "icu"},
 -    {"yo", "icu"},    {"yue", "icu"},   {"yue_cn", "icu"}, {"zh", "icu"},    {"zh_cn", "icu"}, {"zh_hk", "icu"},
 -    {"zh_mo", "icu"}, {"zh_sg", "icu"}, {"zh_tw", "icu"},  {"zu", "icu"}}; // END_OF_EXTENSION_COLLATIONS
-+	const char *const *autoloadable_extensions;
-+	idx_t autoloadable_extensions_count;
-+
-+	const char *default_extension_directories;
-+};
-+
-+extern "C" DUCKDB_EXTENSION_ENTRIES_API const DuckDBExtensionEntriesV1 *duckdb_extension_entries_v1();
-+
-+class ExtensionEntries {
-+public:
-+	static const DuckDBExtensionEntriesV1 &Get();
-+	static const char *DefaultExtensionDirectories();
-+};
-+
-+enum class ExtensionEntryKind : uint8_t {
-+	SETTINGS,
-+	SECRET_TYPES,
-+	COPY_FUNCTIONS,
-+	TYPES,
-+	COLLATIONS,
-+	FILE_PREFIXES,
-+	FILE_POSTFIXES,
-+	FILE_CONTAINS,
-+	SECRET_PROVIDERS
++private:
++	const ExtensionFunctionEntry *data() const;
 +};
  
 -// Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -2346,9 +1388,9 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},  {"s3n://", "httpfs"},
 -    {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
 -    {"abfss://", "azure"}, {"hf://", "httpfs"}}; // END_OF_EXTENSION_FILE_PREFIXES
-+class ExtensionEntryCollection {
++class ExtensionFunctionOverloadEntryCollection {
 +public:
-+	typedef ExtensionEntry value_type;
++	typedef ExtensionFunctionOverloadEntry value_type;
  
 -// Note: these are currently hardcoded in scripts/generate_extensions_function.py
 -// TODO: automate by passing though to script via duckdb
@@ -2356,8 +1398,10 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {".parquet", "parquet"}, {".json", "json"},   {".jsonl", "json"}, {".ndjson", "json"}, {".shp", "spatial"},
 -    {".gpkg", "spatial"},    {".fgb", "spatial"}, {".xlsx", "excel"}, {".avro", "avro"},
 -}; // END_OF_EXTENSION_FILE_POSTFIXES
-+	constexpr explicit ExtensionEntryCollection(ExtensionEntryKind kind) : kind(kind) {
-+	}
++	const ExtensionFunctionOverloadEntry *begin() const;
++	const ExtensionFunctionOverloadEntry *end() const;
++	idx_t size() const;
++	const ExtensionFunctionOverloadEntry &operator[](idx_t index) const;
  
 -// Note: these are currently hardcoded in scripts/generate_extensions_function.py
 -// TODO: automate by passing though to script via duckdb
@@ -2365,10 +1409,9 @@ index d96910f1ef..c0ba25ea3f 100644
 -                                                             {".json?", "json"},
 -                                                             {".ndjson?", ".jsonl?"},
 -                                                             {".jsonl?", ".ndjson?"}}; // EXTENSION_FILE_CONTAINS
-+	const ExtensionEntry *begin() const;
-+	const ExtensionEntry *end() const;
-+	idx_t size() const;
-+	const ExtensionEntry &operator[](idx_t index) const;
++private:
++	const ExtensionFunctionOverloadEntry *data() const;
++};
  
 -// Note: these are currently hardcoded in scripts/generate_extensions_function.py
 -// TODO: automate by passing though to script via duckdb
@@ -2390,39 +1433,6 @@ index d96910f1ef..c0ba25ea3f 100644
 -    {"bearer/config", "httpfs"},
 -    {"mysql/config", "mysql_scanner"},
 -    {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
-+private:
-+	const ExtensionEntry *data() const;
-+
-+private:
-+	ExtensionEntryKind kind;
-+};
-+
-+class ExtensionFunctionEntryCollection {
-+public:
-+	typedef ExtensionFunctionEntry value_type;
-+
-+	const ExtensionFunctionEntry *begin() const;
-+	const ExtensionFunctionEntry *end() const;
-+	idx_t size() const;
-+	const ExtensionFunctionEntry &operator[](idx_t index) const;
-+
-+private:
-+	const ExtensionFunctionEntry *data() const;
-+};
-+
-+class ExtensionFunctionOverloadEntryCollection {
-+public:
-+	typedef ExtensionFunctionOverloadEntry value_type;
-+
-+	const ExtensionFunctionOverloadEntry *begin() const;
-+	const ExtensionFunctionOverloadEntry *end() const;
-+	idx_t size() const;
-+	const ExtensionFunctionOverloadEntry &operator[](idx_t index) const;
-+
-+private:
-+	const ExtensionFunctionOverloadEntry *data() const;
-+};
-+
 +class AutoloadableExtensionCollection {
 +public:
 +	typedef const char *value_type;
@@ -2456,7 +1466,7 @@ index d96910f1ef..c0ba25ea3f 100644
  
  } // namespace duckdb
 diff --git a/src/include/duckdb/main/extension_helper.hpp b/src/include/duckdb/main/extension_helper.hpp
-index f268b9fdc8..012c190e15 100644
+index f268b9fdc8..0567cdc1ae 100644
 --- a/src/include/duckdb/main/extension_helper.hpp
 +++ b/src/include/duckdb/main/extension_helper.hpp
 @@ -174,13 +174,13 @@ public:
@@ -2528,18 +1538,8 @@ index f268b9fdc8..012c190e15 100644
  #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
  		if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
  			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
-@@ -229,8 +229,7 @@ public:
- #endif
- 	}
- 
--	//! Whether an extension can be autoloaded (i.e. it's registered as an autoloadable extension in
--	//! extension_entries.hpp)
-+	//! Whether an extension can be autoloaded (i.e. it's registered in the generated autoload metadata)
- 	static bool CanAutoloadExtension(const string &ext_name);
- 
- 	//! Utility functions for creating meaningful error messages regarding missing extensions
 diff --git a/src/main/extension/CMakeLists.txt b/src/main/extension/CMakeLists.txt
-index 8d856a17c1..7ca48c3e88 100644
+index 8d856a17c1..a360fe6ea1 100644
 --- a/src/main/extension/CMakeLists.txt
 +++ b/src/main/extension/CMakeLists.txt
 @@ -1,15 +1,17 @@
@@ -2553,36 +1553,16 @@ index 8d856a17c1..7ca48c3e88 100644
  # a list
  string(REPLACE ";" "\;" EXT_DIR_ESCAPED "${EXTENSION_DIRECTORIES}")
  
-+add_library(duckdb_extension_entries SHARED extension_entries_generated.cpp)
++add_library(duckdb_autoload_config SHARED extension_entries_generated.cpp)
  target_compile_definitions(
 -  duckdb_main_extension
 -  PRIVATE "DUCKDB_EXTENSION_DIRECTORIES=\"${EXT_DIR_ESCAPED}\"")
-+  duckdb_extension_entries
++  duckdb_autoload_config
 +  PRIVATE DUCKDB_EXTENSION_ENTRIES_BUILD
-+          "DUCKDB_EXTENSION_DIRECTORIES=\"${EXT_DIR_ESCAPED}\"")
++  "DUCKDB_EXTENSION_DIRECTORIES=\"${EXT_DIR_ESCAPED}\"")
  
  set(ALL_OBJECT_FILES
      ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
-diff --git a/src/common/file_system.cpp b/src/common/file_system.cpp
---- a/src/common/file_system.cpp
-+++ b/src/common/file_system.cpp
-@@ -906,8 +906,9 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
--	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
--		if (StringUtil::StartsWith(path, entry.name)) {
--			extension = entry.extension;
--			return true;
--		}
--	}
--	return false;
-+	bool is_remote = false;
-+	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
-+		if (StringUtil::StartsWith(path, entry.name)) {
-+			extension = entry.extension;
-+			is_remote = true;
-+		}
-+	}
-+	return is_remote;
- }
 diff --git a/src/main/extension/extension_entries.cpp b/src/main/extension/extension_entries.cpp
 new file mode 100644
 index 0000000000..a7d0f00d7b
@@ -2733,7 +1713,7 @@ index 0000000000..a7d0f00d7b
 +} // namespace duckdb
 diff --git a/src/main/extension/extension_entries_generated.cpp b/src/main/extension/extension_entries_generated.cpp
 new file mode 100644
-index 0000000000..d71b72870f
+index 0000000000..20f6d8c2df
 --- /dev/null
 +++ b/src/main/extension/extension_entries_generated.cpp
 @@ -0,0 +1,1316 @@
@@ -4076,3 +3056,4 @@ index 81a453d261..d5b72e5450 100644
  	if (dirs_string.empty()) {
 -- 
 2.53.0
+

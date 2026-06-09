@@ -1,4 +1,4 @@
-From 58cee5b8feac0bd182705b1b522e79f9d2b4311e Mon Sep 17 00:00:00 2001
+From da549a5b8c147977dcb55b20ec3a41625a4bdca7 Mon Sep 17 00:00:00 2001
 From: Jan Kramer <jan@jankramer.eu>
 Date: Sat, 6 Jun 2026 07:00:43 +0200
 Subject: [PATCH 3/3] Link CLI against duckdb instead of duckdb_static

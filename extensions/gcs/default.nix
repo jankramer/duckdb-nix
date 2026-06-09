@@ -2,10 +2,10 @@
   applyPatches,
   callPackage,
   fetchFromGitHub,
-  duckdbLib,
   lib,
+  mkExtension,
 
-  abseil-cpp,
+  abseil-cpp_202601,
   curlMinimal,
   grpc,
   nlohmann_json,
@@ -22,7 +22,7 @@ let
   };
 
   staticLibs = {
-    abseil-cpp = abseil-cpp.override { static = true; };
+    abseil-cpp = abseil-cpp_202601.override { static = true; };
     grpc = (grpc.overrideAttrs enableStaticBuild);
     opentelemetry-cpp =
       (opentelemetry-cpp.overrideAttrs (prev: {
@@ -43,7 +43,7 @@ let
 
 in
 
-duckdbLib.mkExtension {
+mkExtension {
   name = "gcs";
 
   src = applyPatches {
