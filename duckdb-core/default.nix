@@ -21,10 +21,6 @@ stdenv.mkDerivation {
     python3
   ];
 
-  NIX_CFLAGS_COMPILE = [
-    "-DDUCKDB_ALLOW_UNSIGNED_NIX_STORE_EXTENSIONS"
-  ];
-
   cmakeFlags = [
     (lib.cmakeFeature "SKIP_EXTENSIONS" "core_functions;parquet")
     (lib.cmakeFeature "OVERRIDE_GIT_DESCRIBE" duckdb-src.gitDescribe)
@@ -37,7 +33,7 @@ stdenv.mkDerivation {
     "dev"
   ];
 
-  # Move static libraries to dev output + update their paths in cmake files
+  # Move static libraries to dev output and update their paths in cmake files
   postInstall = ''
     find $out -name '*.a' -exec bash -c 'sed -i "s|$1|''${1/$out/$dev}|g" '$out'/lib/cmake/**/*.cmake' x {} \;
     moveToOutput "lib/*.a" "$dev"

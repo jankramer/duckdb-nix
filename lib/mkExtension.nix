@@ -57,10 +57,9 @@ lib.extendMkDerivation {
       ninjaFlags = [ "duckdb_local_extension_repo" ];
 
       cmakeFlags = appendAttr "cmakeFlags" [
-        "-DBUILD_SHELL=0"
-        "-DBUILD_MAIN_DUCKDB_LIBRARY=0"
-        "-DEXTENSION_STATIC_BUILD=0"
-        "-DOVERRIDE_GIT_DESCRIBE=${duckdb-src.gitDescribe}"
+        (lib.cmakeFeature "OVERRIDE_GIT_DESCRIBE" duckdb-src.gitDescribe)
+        (lib.cmakeBool "BUILD_EXTENSIONS_ONLY" true)
+        (lib.cmakeBool "EXTENSION_STATIC_BUILD" false)
       ];
 
       installPhase = ''
