@@ -1,4 +1,4 @@
-From da549a5b8c147977dcb55b20ec3a41625a4bdca7 Mon Sep 17 00:00:00 2001
+From f67a06bb0e6ff2993a45295fa13cc426f328ea3d Mon Sep 17 00:00:00 2001
 From: Jan Kramer <jan@jankramer.eu>
 Date: Sat, 6 Jun 2026 07:00:43 +0200
 Subject: [PATCH 3/3] Link CLI against duckdb instead of duckdb_static
@@ -34,6 +34,68 @@ index 0d26359008..d83b7d05ee 100644
  link_threads(shell "")
  if(STATIC_LIBCPP)
    message("Statically linking CLI")
+diff --git a/src/include/duckdb/main/extension_helper.hpp b/src/include/duckdb/main/extension_helper.hpp
+index 3227726611..87d34ea8c1 100644
+--- a/src/include/duckdb/main/extension_helper.hpp
++++ b/src/include/duckdb/main/extension_helper.hpp
+@@ -187,6 +187,21 @@ public:
+ 		return result;
+ 	}
+ 
++	template <size_t N>
++	static vector<pair<string, CatalogType>>
++	FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
++		auto lcase = StringUtil::Lower(name);
++
++		vector<pair<string, CatalogType>> result;
++		for (idx_t i = 0; i < N; i++) {
++			auto &element = entries[i];
++			if (element.name == lcase) {
++				result.push_back(make_pair(element.extension, element.type));
++			}
++		}
++		return result;
++	}
++
+ 	template <class ENTRIES>
+ 	static idx_t ArraySize(const ENTRIES &entries) {
+ 		return entries.size();
+@@ -199,6 +212,16 @@ public:
+ 		return &entries[entry];
+ 	}
+ 
++	template <idx_t N>
++	static idx_t ArraySize(const ExtensionEntry (&entries)[N]) {
++		return N;
++	}
++
++	template <idx_t N>
++	static const ExtensionEntry *GetArrayEntry(const ExtensionEntry (&entries)[N], idx_t entry) {
++		return entry >= N ? nullptr : entries + entry;
++	}
++
+ 	//! Lookup a name in an ExtensionEntry list
+ 	template <class ENTRIES>
+ 	static string FindExtensionInEntries(const string &name, const ENTRIES &entries) {
+@@ -214,6 +237,19 @@ public:
+ 		return "";
+ 	}
+ 
++	template <idx_t N>
++	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
++		auto lcase = StringUtil::Lower(name);
++
++		auto it =
++		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == lcase; });
++
++		if (it != entries + N && it->name == lcase) {
++			return it->extension;
++		}
++		return "";
++	}
++
+ 	//! Lookup a name in an extension entry and try to autoload it
+ 	template <class ENTRIES>
+ 	static void TryAutoloadFromEntry(DatabaseInstance &db, const string &entry, const ENTRIES &entries) {
 -- 
-2.53.0
-
+2.54.0

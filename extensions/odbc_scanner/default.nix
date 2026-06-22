@@ -12,8 +12,8 @@ mkExtension {
     src = fetchFromGitHub {
       owner = "duckdb";
       repo = "odbc-scanner";
-      rev = "8a3266017af8a9abf14a49e2fd5df83d64eb5520";
-      hash = "sha256-4P4Atpb2AkNAqUNxddjVvlp6PSEwORTJE/4jW/YeEuE=";
+      rev = "274a3307341dcafd62471c09b45c5d858d6c95cc";
+      hash = "sha256-I3LtOipBN+WuYiuWvt9sptc7mVglutxo/lMQCvsoz8o=";
     };
 
     patches = [ ./no-git-version.patch ];

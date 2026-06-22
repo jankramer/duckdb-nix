@@ -13,8 +13,8 @@ mkExtension {
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-quack";
-    rev = "87cd65b912a85f38a8522cabcb7514b1854c08bf";
-    hash = "sha256-yWTlHXPkSfVclHMXYjDluP/HS/jDwdXl8kK3uGiuiEI=";
+    rev = "40de7badae4193c29d9c0834473fb76acc6c51e6";
+    hash = "sha256-E33EiV/SYD6l1kHiCNgkt/d15FT8hNM53pNPQgsMEqA=";
   };
 
   buildInputs = [

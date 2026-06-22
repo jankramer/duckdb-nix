@@ -10,8 +10,8 @@ mkExtension {
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-azure";
-    rev = "2ad247d4ca090cd2110f2e35531ab6fcdb80c186";
-    hash = "sha256-EcEaWa3+Q5OdbasrXqKJMNwKTw9QIYk8PiRq+sYh8ao=";
+    rev = "563589b2f24290a4dcdd4247eaedf2b544f9dbcd";
+    hash = "sha256-4gnj1OCdyhFosaCPVmiyFx9nSCSemNRxIC+nmVwtHjs=";
   };
 
   buildInputs = [

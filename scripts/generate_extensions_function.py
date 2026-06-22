@@ -878,7 +878,7 @@ def write_header(data: ExtensionData):
 //
 //===----------------------------------------------------------------------===//
 
-#include \"duckdb/main/extension_entries.hpp\"
+#include \"duckdb/main/extension_entries_shared.hpp\"
 
 #define DUCKDB_EXTENSION_ENTRY_COUNT(array) (sizeof(array) / sizeof(array[0]))
 

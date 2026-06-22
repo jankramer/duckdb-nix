@@ -12,8 +12,8 @@ mkExtension {
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-postgres";
-    rev = "6b2b12cad3afef61e8a4637e714e8a88895fed1a";
-    hash = "sha256-1n4h9RGdbbpd0iCUdyytFxCE+x8tgXp6c/miakz9gYc=";
+    rev = "8f813f9b9c9e52a9074a050a0be60f49160a6baa";
+    hash = "sha256-BICWevTyfE0N6vBirGIwa6EgPnyDkKHnMD+igv4XzZ0=";
     fetchSubmodules = true;
   };
 

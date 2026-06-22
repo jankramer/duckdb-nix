@@ -34,7 +34,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "duckdb";
-  version = "v1.5.3";
+  version = duckdb-src.version;
 
   src = duckdb-src;
 
@@ -47,6 +47,7 @@ stdenv.mkDerivation {
 
   cmakeFlags = [
     (lib.cmakeFeature "SKIP_EXTENSIONS" "core_functions;parquet")
+    (lib.cmakeFeature "OVERRIDE_GIT_DESCRIBE" duckdb-src.gitDescribe)
     (lib.cmakeFeature "EXTENSION_DIRECTORIES" "${repository}/repository")
   ];
 

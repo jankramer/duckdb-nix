@@ -25,8 +25,8 @@ mkExtension {
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-aws";
-    rev = "38d4ed30b7f5855168f4b494bf9be611c868c69a";
-    hash = "sha256-48LuIbzjPE5bG7RTvVYpoonUg0JS8MGyfxh0R/b1NNQ=";
+    rev = "08ad34f625e4a8e15221e462b96000ff29174447";
+    hash = "sha256-ut7+a6PiR5LWyrITEJaC8MLDrtdqtWyjOaP1hqerllA=";
   };
 
   buildInputs = [
