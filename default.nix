@@ -1,7 +1,6 @@
 {
   lib,
   newScope,
-  symlinkJoin,
 }:
 
 let
