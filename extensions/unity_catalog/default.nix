@@ -9,7 +9,7 @@ mkExtension {
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "unity_catalog";
-    rev = "d52a7ee8678a23a8e0f950e955b9ffa1df0c3395";
-    hash = "sha256-bKvfujUeSUgWF+e8ztiZqcAdGjVpFc5TfUOYI6S+jRM=";
+    rev = "fd851475780ca064d9706a5025ea6e5d1d9d7e23";
+    hash = "sha256-Kh982A279Eb8Mgyx4CZC1XXsq8VbmOYsBxpYyYCyFjo=";
   };
 }

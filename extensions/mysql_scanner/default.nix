@@ -15,8 +15,8 @@ mkExtension {
     src = fetchFromGitHub {
       owner = "duckdb";
       repo = "duckdb-mysql";
-      rev = "37006e53a58ddc31eeb96ff95c21f3196e27fcf2";
-      hash = "sha256-tJhJE8nDlQUJO9vfwZo5mx8hIRgO4idJH6ftldKcFUQ=";
+      rev = "7267164dab3409e943261aeee6ae32f1b00847a7";
+      hash = "sha256-Zx2QzzisoGsQ95t2Gck+akFt30GRhjWXffuyUh3GdLU=";
       fetchSubmodules = true;
     };
 

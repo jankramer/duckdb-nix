@@ -50,8 +50,8 @@ mkExtension {
     src = fetchFromGitHub {
       owner = "northpolesec";
       repo = "duckdb-gcs";
-      rev = "4cc171913311b6c61a337260116cc116bcf84981";
-      hash = "sha256-mLRae92zZV0iPPeMeO3XxkjzrZWBec+xUEMhTTD4Qv4=";
+      rev = "7612d198de85dee10ffd6e818fb51174eb0a1da1";
+      hash = "sha256-Me+ACBNiYbDFDHkoCGo8NR0S5vlpYegAPEsI1Z5RPzw=";
     };
     patches = [ ./adc_fallback.patch ];
   };

@@ -4,9 +4,9 @@
 }:
 
 let
-  version = "1.5.4";
-  rev = "08e34c447bae34eaee3723cac61f2878b6bdf787";
-  hash = "sha256-6xpKZKfH5/nwE2nU5kcpgITKFm3ilb1PYf9QEk+bKoM=";
+  version = "1.5.5";
+  rev = "d8cdaa33fda8df955cc76ef58a280f68f4cd43fa";
+  hash = "sha256-vFXrMcWF5KDYYRjWZb6iJdhGnCAb6SMlSgzlcr+FQ8Y=";
 in
 
 applyPatches {

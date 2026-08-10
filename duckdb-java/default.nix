@@ -10,13 +10,13 @@
 
 stdenv.mkDerivation {
   pname = "duckdb-java";
-  version = "1.5.3";
+  version = "1.5.5.1";
 
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-java";
-    rev = "b4a05f05a4904e739da81a741b1856879c4536f4";
-    hash = "sha256-J8RTBlXxXWKcoqeQ8vr10d1B3fJR1HjK6ZXPmGdnTnY=";
+    rev = "2641879daaf4ee2c8998d7acfeab474c0a2d382e";
+    hash = "sha256-x4YVDIbzlZbdTVf5nbdA/i1P9o//BuDrwEWbguznX5M=";
   };
 
   patches = [ ./patches/0001-Build-against-external-duckdb.patch ];

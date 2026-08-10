@@ -12,8 +12,8 @@ mkExtension {
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "ducklake";
-    rev = "d318a545571d7d46eb751fa2aa5f6f4389285d3c";
-    hash = "sha256-qq+U3+X2cGtw91/WnhJJG2WyWQflkJMuBvGjQ0si2DY=";
+    rev = "d8a1881e22516ea3d186d73e83c65fe5bd1a1dc4";
+    hash = "sha256-ULIM7qlU0RT0iqttNY9LUrRAVWLYKshQtmEuEgKZ1lY=";
   };
 
   buildInputs = [

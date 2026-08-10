@@ -9,7 +9,7 @@ mkExtension {
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-sqlite";
-    rev = "494e9feed54c20b6bbfb665baf26864bc7e3b517";
-    hash = "sha256-KGN/HbL3S0W8885CEarSUcTA6haSCFq5ElWA9Fzxnlg=";
+    rev = "f79b1db7d7730b18d0f8400d3650ffa6b45168d8";
+    hash = "sha256-zQSB/dreOArPrrXV8KP6i/nOlSguRyOGWORvwZ5BsfI=";
   };
 }
