@@ -176,6 +176,15 @@ index 58476e22d0..3bc4c200f9 100644
  		vector<LogicalType> arguments;
  		auto splits = StringUtil::Split(entry.signature, ">");
  		auto return_type = DBConfig::ParseLogicalType(splits[1]);
+diff --git a/src/function/built_in_functions.cpp b/src/function/built_in_functions.cpp
+index 3bc4c200f9..e07f05eb9a 100644
+--- a/src/function/built_in_functions.cpp
++++ b/src/function/built_in_functions.cpp
+@@ -168 +168,3 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
+-	AddExtensionFunction(std::move(current_set));
++	if (!current_set.name.empty()) {
++		AddExtensionFunction(std::move(current_set));
++	}
 diff --git a/src/include/duckdb/main/extension_entries_shared.hpp b/src/include/duckdb/main/extension_entries_shared.hpp
 new file mode 100644
 index 0000000000..49b759ecea
@@ -861,4 +870,3 @@ index 0e27da6ff2..228672a05f 100644
  			return true;
 -- 
 2.54.0
-
