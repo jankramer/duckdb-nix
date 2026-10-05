@@ -28,8 +28,8 @@ mkExtension {
     src = fetchFromGitHub {
       owner = "duckdb";
       repo = "duckdb-iceberg";
-      rev = "45163a28e0ed6a2071a82a1bf1dd432d0216cf9c";
-      hash = "sha256-g7H0kKFjuiQ7LL3HvWe0PJYeAzlfh9f71JVVfz4zkWI=";
+      rev = "890b78a9cfae380396b435b033c27cdbdad04e42";
+      hash = "sha256-9O96m3Bf0C3qgwTbG/8i9pHRVq/ZTKXobeG1bidJB7o=";
     };
 
     patches = [
