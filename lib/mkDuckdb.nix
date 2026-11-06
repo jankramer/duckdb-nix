@@ -3,180 +3,87 @@
   duckdb-src,
   duckdb-core,
   duckdb-java,
+  jdk,
   lib,
-  jdk_headless,
-  makeWrapper,
-  patchelf,
-  stdenv,
-  symlinkJoin,
+  ninja,
   python3,
+  stdenv,
+  writeText,
 }:
 
-{ extensions, withJdbc }:
+{
+  extensions,
+  withJdbc ? true,
+}:
 
 let
-  repository = symlinkJoin {
-    name = "duckdb-${duckdb-src.version}-extension-repository";
-    paths = extensions;
-  };
-
-  autoloadFlagsForExt =
-    ext:
-    (map (p: "--extension_file_prefixes ${ext.extensionName}=${p}") ext.filePrefixes)
-    ++ (map (p: "--extension_file_postfixes ${ext.extensionName}=${p}") ext.filePostfixes);
-
-  autoloaderFlags = builtins.concatStringsSep " " (
-    builtins.concatMap autoloadFlagsForExt extensions
+  names = map (ext: ext.extensionName) extensions;
+  linkConfig = writeText "duckdb-extension-links.cmake" (
+    lib.concatMapStringsSep "\n" (ext: ''
+      set(EXTENSION_PREFIX "${ext}")
+      ${ext.linkCmake or ""}
+      ${lib.concatMapStringsSep "\n" (source: ''target_sources(duckdb PRIVATE "${source}")'') (
+        ext.registrationSources or [ ]
+      )}
+    '') extensions
   );
-
-  sharedLib = name: "${name}${stdenv.hostPlatform.extensions.sharedLibrary}";
-  installLib = from: name: "install -Dm644 ${from}/${sharedLib name} $out/lib/${sharedLib name}";
+  os = if stdenv.hostPlatform.isDarwin then "macos" else "linux";
+  arch = if stdenv.hostPlatform.isAarch64 then "arm64" else "amd64";
+  suffix = stdenv.hostPlatform.extensions.sharedLibrary;
 in
+assert lib.assertMsg (
+  builtins.length names == builtins.length (lib.unique names)
+) "Duplicate DuckDB extensions selected";
+assert lib.assertMsg (builtins.all (
+  ext: ext.core == duckdb-core
+) extensions) "DuckDB extensions must use the same engine build";
 stdenv.mkDerivation {
   pname = "duckdb";
   version = duckdb-src.version;
-
-  src = duckdb-src;
-
+  src = ./compose;
   nativeBuildInputs = [
     cmake
-    jdk_headless
-    makeWrapper
-    patchelf
-  ];
-
+    ninja
+    python3
+  ]
+  ++ lib.optional withJdbc jdk;
+  buildInputs = lib.unique (lib.concatMap (ext: ext.linkInputs or [ ]) extensions);
   cmakeFlags = [
-    (lib.cmakeFeature "SKIP_EXTENSIONS" "core_functions;parquet")
-    (lib.cmakeFeature "OVERRIDE_GIT_DESCRIBE" duckdb-src.gitDescribe)
-    (lib.cmakeFeature "EXTENSION_DIRECTORIES" "${repository}/repository")
-  ];
-
-  postPatch = ''
-    ${python3}/bin/python3 ${../scripts/generate_extensions_function.py} \
-      --shell "${duckdb-core}/bin/duckdb" \
-      --extension_repository "${repository}/repository" \
-      ${autoloaderFlags}
+    "-DDUCKDB_SOURCE=${duckdb-src}"
+    "-DARCHIVES=${duckdb-core}"
+    (lib.cmakeBool "WITH_JDBC" withJdbc)
+    "-DEXTENSIONS=${lib.concatStringsSep ";" names}"
+    "-DEXTENSION_ARCHIVE_DIRS=${lib.concatMapStringsSep ";" (ext: "${ext}/lib") extensions}"
+    "-DEXTENSION_LINK_CONFIG=${linkConfig}"
+  ]
+  ++ lib.optional withJdbc "-DJDBC_OBJECTS=${duckdb-java}";
+  postInstall = lib.optionalString withJdbc ''
+    mkdir -p "$out/share/java"
+    cp ${duckdb-java}/share/java/duckdb_jdbc_nolib.jar "$out/share/java/"
   '';
-
-  buildPhase = ''
-    runHook preBuild
-    cmake --build . --target duckdb_autoload_config
-    runHook postBuild
+  # Pack after fixup so extraction preserves the final shared-engine path.
+  postFixup = lib.optionalString withJdbc ''
+    mkdir jar-native
+    cp "$out/lib/libduckdb_java${suffix}" "jar-native/libduckdb_java.so_${os}_${arch}"
+    cp "$out/share/java/duckdb_jdbc_nolib.jar" "$out/share/java/duckdb_jdbc.jar"
+    jar uf "$out/share/java/duckdb_jdbc.jar" -C jar-native "libduckdb_java.so_${os}_${arch}"
   '';
-
-  installPhase = ''
-    runHook preInstall
-
-    install -Dm755 ${duckdb-core}/bin/duckdb $out/bin/duckdb
-    ${installLib "${duckdb-core}/lib" "libduckdb"}
-    ${installLib "src/main/extension" "libduckdb_autoload_config"}
-
-    ${lib.optionalString withJdbc ''
-      ${installLib "${duckdb-java}/lib" "libduckdb_java"}
-      install -Dm644 ${duckdb-java}/share/java/duckdb_jdbc.jar $out/share/java/duckdb_jdbc.jar
-    ''}
-
-    runHook postInstall
-  '';
-
-  postFixup = ''
-    old="${duckdb-core}"
-    new="$out"
-
-    patch_text_refs() {
-      local root="$1"
-
-      # Only text files. Do not blindly substituteInPlace binaries.
-      while IFS= read -r -d "" f; do
-        substituteInPlace "$f" \
-          --replace-fail "$old" "$new"
-      done < <(grep -IlrZ -- "$old" "$root" || true)
-    }
-
-    patch_macho() {
-      local f="$1"
-      chmod u+w "$f" || true
-
-      # LC_ID_DYLIB: the dylib's own install name.
-      local id
-      id="$(otool -D "$f" 2>/dev/null | sed -n '2p' || true)"
-      if [[ "$id" == "$old"* ]]; then
-        install_name_tool -id "''${id/$old/$new}" "$f"
-      fi
-
-      # LC_LOAD_DYLIB / related dependency entries.
-      otool -L "$f" 2>/dev/null \
-        | awk 'NR > 1 { print $1 }' \
-        | while IFS= read -r dep; do
-            if [[ "$dep" == "$old"* && "$dep" != "$id" ]]; then
-              install_name_tool -change "$dep" "''${dep/$old/$new}" "$f" || true
-            fi
-          done
-
-      # LC_RPATH entries.
-      otool -l "$f" 2>/dev/null \
-        | awk '/cmd LC_RPATH/ { getline; getline; print $2 }' \
-        | while IFS= read -r rp; do
-            if [[ "$rp" == "$old"* ]]; then
-              install_name_tool -rpath "$rp" "''${rp/$old/$new}" "$f" || true
-            fi
-          done
-    }
-
-    is_elf() {
-      local magic
-      magic="$(od -An -N4 -tx1 "$1" 2>/dev/null | tr -d ' \n' || true)"
-      [[ "$magic" == "7f454c46" ]]
-    }
-
-    patch_elf() {
-      local f="$1"
-
-      is_elf "$f" || return 0
-
-      chmod u+w "$f" || true
-
-      local soname
-      soname="$(patchelf --print-soname "$f" 2>/dev/null || true)"
-
-      if [[ -n "$soname" && "$soname" == "$old"* ]]; then
-        patchelf --set-soname "''${soname/$old/$new}" "$f"
-      fi
-
-      while IFS= read -r needed; do
-        if [[ "$needed" == "$old"* ]]; then
-          patchelf --replace-needed "$needed" "''${needed/$old/$new}" "$f"
-        fi
-      done < <(patchelf --print-needed "$f" 2>/dev/null || true)
-
-      local rpath
-      rpath="$(patchelf --print-rpath "$f" 2>/dev/null || true)"
-
-      if [[ "$rpath" == *"$old"* ]]; then
-        patchelf --set-rpath "''${rpath//$old/$new}" "$f"
-      fi
-    }
-
-    for outputName in $outputs; do
-      root="''${!outputName}"
-      [ -e "$root" ] || continue
-
-      patch_text_refs "$root"
-
-      while IFS= read -r -d "" f; do
-        ${lib.optionalString stdenv.hostPlatform.isDarwin ''
-          patch_macho "$f"
-        ''}
-        ${lib.optionalString stdenv.hostPlatform.isLinux ''
-          patch_elf "$f"
-        ''}
-      done < <(find "$root" -type f -print0)
-    done
-
-    ${lib.optionalString withJdbc ''
-    jar uf $out/share/java/duckdb_jdbc.jar -C $out/lib ${sharedLib "libduckdb_java"}
-    ''}
-  '';
-
-  disallowedReferences = [ duckdb-core ];
+  disallowedReferences = [ duckdb-core ] ++ extensions ++ lib.optional withJdbc duckdb-java;
+  passthru = {
+    selectedExtensions = extensions;
+    inherit withJdbc;
+    core = duckdb-core;
+    jdbc = duckdb-java;
+  };
+  meta = {
+    description = "DuckDB with a statically composed extension set and shared CLI/JDBC engine";
+    homepage = "https://duckdb.org";
+    license = lib.licenses.mit;
+    mainProgram = "duckdb";
+    platforms = [
+      "aarch64-darwin"
+      "aarch64-linux"
+      "x86_64-linux"
+    ];
+  };
 }

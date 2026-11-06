@@ -1,18 +1,20 @@
 {
   azure-sdk-for-cpp,
-  fetchFromGitHub,
+  extensionSources,
   mkExtension,
 }:
 
 mkExtension {
+  linkCmake = ''
+    find_package(azure-identity-cpp CONFIG REQUIRED)
+    find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
+    find_package(azure-storage-files-datalake-cpp CONFIG REQUIRED)
+    target_link_libraries(duckdb PRIVATE Azure::azure-identity Azure::azure-storage-blobs Azure::azure-storage-files-datalake)
+  '';
+
   name = "azure";
 
-  src = fetchFromGitHub {
-    owner = "duckdb";
-    repo = "duckdb-azure";
-    rev = "003214c96d0caa39d5c3e27a9e1976a0692c7d37";
-    hash = "sha256-+d0jF+kzxhcIf6HWgn1FRotPalH2ZYnb1rdXpsJmhAc=";
-  };
+  src = extensionSources.azure;
 
   buildInputs = [
     azure-sdk-for-cpp.identity

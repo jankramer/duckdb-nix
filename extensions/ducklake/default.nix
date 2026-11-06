@@ -1,20 +1,19 @@
 {
-  fetchFromGitHub,
+  extensionSources,
   mkExtension,
-  lib,
 
-  croaring
+  croaring,
 }:
 
 mkExtension {
+  linkCmake = ''
+    find_package(roaring CONFIG REQUIRED)
+    target_link_libraries(duckdb PRIVATE roaring::roaring)
+  '';
+
   name = "ducklake";
 
-  src = fetchFromGitHub {
-    owner = "duckdb";
-    repo = "ducklake";
-    rev = "ac7595b0a1305bea3d4cfaca763b0ce964c763a2";
-    hash = "sha256-QtdhWneqq61dvX2KX68mHm/06YZ30xWITIq5fJqCaFc=";
-  };
+  src = extensionSources.ducklake;
 
   buildInputs = [
     croaring

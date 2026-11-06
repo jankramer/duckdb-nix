@@ -4,68 +4,74 @@
   ninja,
   python3,
   stdenv,
-
   duckdb-src,
   duckdb-core,
 }:
 
 lib.extendMkDerivation {
   constructDrv = stdenv.mkDerivation;
-
   excludeDrvArgNames = [
     "extensionSrc"
     "src"
+    "linkCmake"
+    "registrationSources"
+    "extraArchives"
   ];
-
   extendDrvArgs =
-    _finalAttrs:
+    finalAttrs:
     previousAttrs@{
       name,
       src ? null,
       extensionSrc ? src,
-
       filePrefixes ? [ ],
       filePostfixes ? [ ],
+      linkCmake ? "",
+      registrationSources ? [ ],
+      extraArchives ? [ ],
       ...
     }:
     let
-      extensionName = name;
       appendAttr = attr: values: values ++ (previousAttrs.${attr} or [ ]);
-      extensionSrcFlag = lib.optionalString (extensionSrc != null) "SOURCE_DIR ${extensionSrc}";
     in
     {
-      inherit extensionName filePrefixes filePostfixes;
-
-      name = "duckdb-${duckdb-src.version}-ext-${extensionName}";
-
+      name = "duckdb-${duckdb-src.version}-ext-${name}";
+      extensionName = name;
+      inherit filePrefixes filePostfixes;
       src = duckdb-src;
-
       nativeBuildInputs = appendAttr "nativeBuildInputs" [
         cmake
         ninja
         python3
       ];
-
-      buildInputs = appendAttr "buildInputs" [ duckdb-core ];
-
-      dontStrip = true;
-
+      cmakeFlags = appendAttr "cmakeFlags" (
+        (import ./buildFlags.nix { inherit duckdb-src; })
+        ++ [
+          "-DPREBUILT_BINARY=${duckdb-core}/lib/libduckdb_static.a"
+          "-DBUILD_SHELL=OFF"
+        ]
+      );
       preConfigure = ''
-        echo "duckdb_extension_load(${extensionName} DONT_LINK ${extensionSrcFlag})" > extension/extension_config.cmake
+        echo 'duckdb_extension_load(${name} ${
+          lib.optionalString (extensionSrc != null) "SOURCE_DIR ${extensionSrc}"
+        })' > extension/extension_config.cmake
+      ''
+      + (previousAttrs.preConfigure or "");
+      buildPhase = ''
+        runHook preBuild
+        cmake --build . --parallel "$NIX_BUILD_CORES" --target ${name}_extension
+        runHook postBuild
       '';
-
-      ninjaFlags = [ "duckdb_local_extension_repo" ];
-
-      cmakeFlags = appendAttr "cmakeFlags" [
-        (lib.cmakeFeature "OVERRIDE_GIT_DESCRIBE" duckdb-src.gitDescribe)
-        (lib.cmakeBool "BUILD_EXTENSIONS_ONLY" true)
-        (lib.cmakeBool "EXTENSION_STATIC_BUILD" false)
-      ];
-
       installPhase = ''
         runHook preInstall
-        find ./repository -type f -exec install -Dm 0755 "{}" "$out/{}" \;
+        mkdir -p "$out/lib"
+        cp extension/${name}/lib${name}_extension.a "$out/lib/"
+        ${lib.concatMapStringsSep "\n" (archive: "cp ${archive} \"$out/lib/\"") extraArchives}
         runHook postInstall
       '';
+      passthru = (previousAttrs.passthru or { }) // {
+        inherit extensionSrc linkCmake registrationSources;
+        linkInputs = (finalAttrs.buildInputs or [ ]) ++ (finalAttrs.propagatedBuildInputs or [ ]);
+        core = duckdb-core;
+      };
     };
 }

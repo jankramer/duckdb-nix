@@ -1,21 +1,19 @@
 {
-  callPackage,
-  fetchFromGitHub,
+  extensionSources,
   mkExtension,
   openssl,
   libpq,
-  lib,
 }:
 
 mkExtension {
+  linkCmake = ''
+    find_package(OpenSSL REQUIRED)
+    find_package(PostgreSQL REQUIRED)
+    target_link_libraries(duckdb PRIVATE OpenSSL::SSL OpenSSL::Crypto PostgreSQL::PostgreSQL)
+  '';
+
   name = "postgres_scanner";
-  src = fetchFromGitHub {
-    owner = "duckdb";
-    repo = "duckdb-postgres";
-    rev = "318dabb2474fc3789b0199301a2e661e19c1b4fc";
-    hash = "sha256-Sn3xXJH2EHc6ecdKcw15/MMi8xnMPhJRZ8Cg+zlvV5o=";
-    fetchSubmodules = true;
-  };
+  src = extensionSources.postgres_scanner;
 
   buildInputs = [
     openssl

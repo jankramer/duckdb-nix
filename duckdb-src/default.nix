@@ -1,27 +1,14 @@
-{
-  applyPatches,
-  fetchFromGitHub,
-}:
+{ fetchFromGitHub }:
 
-let
-  version = "1.5.6";
-  rev = "069cc9f9b5be802405797faecc284961b07c70ef";
-  hash = "sha256-xHcucJA+2nTD9oeoZxDQzGS6QNnzjHQ7t9sz0OHA+zo=";
-in
-
-applyPatches {
-  src = fetchFromGitHub {
-    name = "duckdb-src-${version}";
-    owner = "duckdb";
-    repo = "duckdb";
-
-    inherit rev hash;
-
-    passthru = {
-      inherit version;
-      gitDescribe = "v${version}-0-g${builtins.substring 0 10 rev}";
-    };
+fetchFromGitHub {
+  name = "duckdb-src-2.0.0";
+  owner = "duckdb";
+  repo = "duckdb";
+  rev = "d54cbbe3df17e8e5ce68312f483b4155836112aa";
+  hash = "sha256-1fhgPD/QGT/fK+BabX2dbTWOsajS6feNl5+9iw8rvwU=";
+  passthru = {
+    version = "2.0.0";
+    gitDescribe = "v2.0.0";
+    gitRevision = "d54cbbe3df17e8e5ce68312f483b4155836112aa";
   };
-
-  patches = map (p: ./. + ("/patches/" + p)) (builtins.attrNames (builtins.readDir ./patches));
 }

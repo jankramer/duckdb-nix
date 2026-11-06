@@ -12,6 +12,8 @@ let
     mkDuckdb = self.callPackage ./lib/mkDuckdb.nix { };
     mkExtension = self.callPackage ./lib/mkExtension.nix { };
 
+    extensionSources = self.callPackage ./extensions/sources.nix { };
+
     extensions = {
       autocomplete = self.mkExtension { name = "autocomplete"; };
       core_functions = self.mkExtension { name = "core_functions"; };
@@ -44,12 +46,13 @@ let
     };
 
     defaultExtensions = [
-        self.extensions.core_functions
-        self.extensions.parquet
-        self.extensions.httpfs
-        self.extensions.gcs
-        self.extensions.icu
-        self.extensions.json
+      self.extensions.autocomplete
+      self.extensions.core_functions
+      self.extensions.parquet
+      self.extensions.httpfs
+      self.extensions.gcs
+      self.extensions.icu
+      self.extensions.json
     ];
 
     default = self.mkDuckdb {
@@ -67,7 +70,13 @@ let
 in
 scope.default.overrideAttrs (previousAttrs: {
   passthru = (previousAttrs.passthru or { }) // {
-    inherit (scope) withExtensions mkExtension extensions defaultExtensions;
+    inherit (scope)
+      withExtensions
+      mkDuckdb
+      mkExtension
+      extensions
+      defaultExtensions
+      ;
 
     src = scope.duckdb-src;
     core = scope.duckdb-core;

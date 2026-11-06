@@ -1,21 +1,25 @@
 {
-  fetchFromGitHub,
+  extensionSources,
   mkExtension,
-  lib,
 
   curlMinimal,
   openssl,
 }:
 
 mkExtension {
+  linkCmake = ''
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(duckdb PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    if(APPLE)
+      find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+      find_library(SECURITY_FRAMEWORK Security REQUIRED)
+      target_link_libraries(duckdb PRIVATE ''${COREFOUNDATION_FRAMEWORK} ''${SECURITY_FRAMEWORK})
+    endif()
+  '';
+
   name = "quack";
 
-  src = fetchFromGitHub {
-    owner = "duckdb";
-    repo = "duckdb-quack";
-    rev = "7e80f7ffcc98d0b3e81d0e1df8cc1c2da240a64b";
-    hash = "sha256-fLswkJMvfhv8yAsWIiZvG6Lg5Svy8d8d8+WmPiWt4AI=";
-  };
+  src = extensionSources.quack;
 
   buildInputs = [
     curlMinimal

@@ -1,0 +1,52 @@
+--- a/src/gcs_extension.cpp
++++ b/src/gcs_extension.cpp
+@@ -45,21 +45,11 @@
+ 	return "";
+ }
+ 
+-static void LoadInternal(ExtensionLoader &loader) {
+-	auto &instance = loader.GetDatabaseInstance();
+-
+-	// Try to find a CA cert file.
+-	auto caFile = FindCACertFile(loader.GetDatabaseInstance());
+-
+-	// Register GCS filesystem - it will handle [gs,gcs,gcss]:// URLs via CanHandle()
+-	auto &fs = instance.GetFileSystem();
+-	fs.RegisterSubSystem(make_uniq<GCSFileSystem>(caFile));
+-
+-	// Register secrets
+-	CreateGCSSecretFunctions::Register(loader);
+-
+-	// Register extension options
+-	auto &config = DBConfig::GetConfig(instance);
++void RegisterGCSOptions(DBConfig &config) {
++	// The optional static capability can register settings before database startup.
++	if (config.HasExtensionOption("gcs_enable_metadata_cache")) {
++		return;
++	}
+ 	GCSReadOptions default_read_options;
+ 
+ 	config.AddExtensionOption("gcs_enable_metadata_cache",
+@@ -101,6 +91,22 @@
+ #endif
+ }
+ 
++static void LoadInternal(ExtensionLoader &loader) {
++	auto &instance = loader.GetDatabaseInstance();
++
++	// Try to find a CA cert file.
++	auto caFile = FindCACertFile(loader.GetDatabaseInstance());
++
++	// Register GCS filesystem - it will handle [gs,gcs,gcss]:// URLs via CanHandle()
++	auto &fs = instance.GetFileSystem();
++	fs.RegisterSubSystem(make_uniq<GCSFileSystem>(caFile));
++
++	// Register secrets
++	CreateGCSSecretFunctions::Register(loader);
++
++	RegisterGCSOptions(DBConfig::GetConfig(instance));
++}
++
+ void GcsExtension::Load(ExtensionLoader &loader) {
+ 	LoadInternal(loader);
+ }

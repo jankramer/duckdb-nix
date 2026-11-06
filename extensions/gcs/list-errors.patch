@@ -1,0 +1,13 @@
+--- a/src/gcs_filesystem.cpp
++++ b/src/gcs_filesystem.cpp
+@@ -545,8 +545,8 @@
+ 					throw IOException("GCS request timed out or service unavailable. Check network connectivity.");
+ 				}
+ 
+-				// Log but continue for other errors
+-				continue;
++				// A failed listing (including malformed ADC) is not an empty result.
++				throw IOException("Failed to list GCS objects: " + status.message());
+ 			}
+ 
+ 			std::string full_path = parsed_url.prefix + "://" + parsed_url.bucket + "/" + object_metadata->name();

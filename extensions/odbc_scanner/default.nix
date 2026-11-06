@@ -1,22 +1,25 @@
 {
   applyPatches,
-  fetchFromGitHub,
+  extensionSources,
   mkExtension,
   unixodbc,
 }:
 
 mkExtension {
+  linkCmake = ''
+    find_package(ODBC REQUIRED)
+    find_library(ODBCINST_LIBRARY NAMES odbcinst REQUIRED)
+    target_link_libraries(duckdb PRIVATE ODBC::ODBC ''${ODBCINST_LIBRARY})
+  '';
+
   name = "odbc_scanner";
 
   src = applyPatches {
-    src = fetchFromGitHub {
-      owner = "duckdb";
-      repo = "odbc-scanner";
-      rev = "7ce06c95c94b46a6984968439ca31ce968a2f473";
-      hash = "sha256-V9gLudrOlG4El9gBOU25PynEWD0std1bzvxz9oe2z6U=";
-    };
-
-    patches = [ ./no-git-version.patch ];
+    src = extensionSources.odbc_scanner;
+    postPatch = ''
+      cp ${./CMakeLists.txt} CMakeLists.txt
+      cp ${./capi_entry_point.cpp} src/capi_entry_point.cpp
+    '';
   };
 
   buildInputs = [ unixodbc ];

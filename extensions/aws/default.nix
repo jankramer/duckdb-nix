@@ -1,7 +1,7 @@
 {
   aws-sdk-cpp,
   curl,
-  fetchFromGitHub,
+  extensionSources,
   mkExtension,
   openssl,
   zlib,
@@ -13,6 +13,9 @@ let
       "core"
       "identity-management"
       "rds"
+      "redshift"
+      "redshift-serverless"
+      "cloudformation"
       "sso"
       "sts"
     ];
@@ -20,14 +23,15 @@ let
 in
 
 mkExtension {
+  linkCmake = ''
+    find_package(ZLIB REQUIRED)
+    find_package(AWSSDK REQUIRED COMPONENTS core sso sts identity-management rds redshift redshift-serverless cloudformation)
+    target_link_libraries(duckdb PRIVATE ''${AWSSDK_LINK_LIBRARIES})
+  '';
+
   name = "aws";
 
-  src = fetchFromGitHub {
-    owner = "duckdb";
-    repo = "duckdb-aws";
-    rev = "28c853c084a6e3acd36d7b8018c42438bb8c5a33";
-    hash = "sha256-6FIdsmzzkpUnhxVzN5hd9wuQMPPl9VifoCQjttCJG8M=";
-  };
+  src = extensionSources.aws;
 
   buildInputs = [
     aws-sdk-cpp-minimal

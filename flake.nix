@@ -16,6 +16,14 @@
     {
       overlays.default = final: prev: { duckdb = final.callPackage ./default.nix { }; };
 
+      checks = mkOutput (
+        { pkgs }:
+        import ./checks {
+          inherit pkgs;
+          duckdb = pkgs.callPackage ./default.nix { };
+        }
+      );
+
       packages = mkOutput (
         { pkgs }:
         {

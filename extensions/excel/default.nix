@@ -1,7 +1,7 @@
 {
   bzip2,
   expat,
-  fetchFromGitHub,
+  extensionSources,
   minizip-ng,
   mkExtension,
   openssl,
@@ -11,14 +11,16 @@
 }:
 
 mkExtension {
+  linkCmake = ''
+    find_package(EXPAT REQUIRED)
+    find_package(ZLIB REQUIRED)
+    find_package(minizip-ng CONFIG REQUIRED)
+    target_link_libraries(duckdb PRIVATE EXPAT::EXPAT MINIZIP::minizip-ng ZLIB::ZLIB)
+  '';
+
   name = "excel";
 
-  src = fetchFromGitHub {
-    owner = "duckdb";
-    repo = "duckdb-excel";
-    rev = "f4c72b5ef04a03b3a78a95b5a2ee94ba93e3178d";
-    hash = "sha256-hyHTiTfRR+hXJ7hZKt/h/Hu1zNgEYEbMozIv6WZbnfA=";
-  };
+  src = extensionSources.excel;
 
   buildInputs = [
     bzip2

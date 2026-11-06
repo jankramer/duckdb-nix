@@ -50,10 +50,14 @@ mkExtension {
     src = fetchFromGitHub {
       owner = "northpolesec";
       repo = "duckdb-gcs";
-      rev = "7612d198de85dee10ffd6e818fb51174eb0a1da1";
-      hash = "sha256-Me+ACBNiYbDFDHkoCGo8NR0S5vlpYegAPEsI1Z5RPzw=";
+      rev = "f55eef6635f5b613d7cb90a98fe2ed7afcd0f0c8";
+      hash = "sha256-QefFjTkZqNYgj3YRTa0ST10G4gUvZBT+hY5mwEu2Dmg=";
     };
-    patches = [ ./adc_fallback.patch ];
+    patches = [
+      ./adc_fallback.patch
+      ./register-options.patch
+      ./list-errors.patch
+    ];
   };
 
   buildInputs = [
@@ -66,6 +70,13 @@ mkExtension {
     curlMinimal
     nlohmann_json
   ];
+
+  registrationSources = [ ./settings.cpp ];
+  linkCmake = ''
+    find_package(google_cloud_cpp_storage REQUIRED)
+    find_package(google_cloud_cpp_storage_grpc REQUIRED)
+    target_link_libraries(duckdb PRIVATE google-cloud-cpp::storage google-cloud-cpp::storage_grpc)
+  '';
 
   filePrefixes = [
     "gs://"
