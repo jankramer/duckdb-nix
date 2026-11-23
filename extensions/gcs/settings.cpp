@@ -26,8 +26,8 @@ int32_t DescribeGCSSettings(duckdb_extension_descriptor *descriptor) {
     if (descriptor->version < 2) return 1;
     descriptor->version = 2;
     descriptor->name = "gcs_startup_settings";
-    descriptor->extension_version = "2.0.0";
-    descriptor->api_version = "v2.0.0";
+    descriptor->extension_version = "2.0.1";
+    descriptor->api_version = "v2.0.1";
     descriptor->database_callback = reinterpret_cast<void (*)(void)>(ConfigureGCS);
     return 0;
 }

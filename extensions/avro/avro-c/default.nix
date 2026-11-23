@@ -11,14 +11,14 @@
 
 stdenv.mkDerivation rec {
   pname = "avro-c";
-  version = "1.11.3-51ab9b2";
+  version = "1.11.3-aad036b";
 
-  # Same avro-c commit as the DuckDB 2.0 Avro submodule, including metadata APIs.
+  # Same avro-c commit as the DuckDB 2.0.1 Avro submodule, including writer cleanup APIs.
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-avro-c";
-    rev = "51ab9b2d38d990dcf9629288fd308a674199ec2e";
-    hash = "sha256-+DbgVayOG1BjnzkJ7RuEXHVT7ANHWa3sNG79Yjvb3Mc=";
+    rev = "aad036b7ad5d1eb183e68162132cf85e3bfba138";
+    hash = "sha256-i8wppwEyfifoXce0eJUVGWEqDRc2ERzQDFwocVJe5Ec=";
   };
 
   sourceRoot = "${src.name}/lang/c";

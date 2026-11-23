@@ -9,7 +9,7 @@ public final class CatalogSmoke {
         for (int i = 0; i < 2; i++) {
             try (Connection c = DriverManager.getConnection("jdbc:duckdb:", p)) {
                 Smoke.equal(args[0], Smoke.scalar(c, Smoke.SETS));
-                Smoke.equal("v2.0.0", Smoke.scalar(c, "SELECT version()"));
+                Smoke.equal("v2.0.1", Smoke.scalar(c, "SELECT version()"));
                 try (Statement s = c.createStatement()) { s.execute(args[1]); }
                 if (args[0].contains("odbc_scanner")) {
                     Smoke.rejects(c, "SELECT odbc_connect('Driver=Nonexistent;')", "enable_external_access");

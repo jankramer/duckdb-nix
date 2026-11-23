@@ -3,7 +3,7 @@
 #include <string.h>
 
 int main(void) {
-    if (strcmp(duckdb_library_version(), "v2.0.0") != 0) return 1;
+    if (strcmp(duckdb_library_version(), "v2.0.1") != 0) return 1;
     for (int i = 0; i < 2; ++i) {
         duckdb_database db = NULL;
         duckdb_connection connection = NULL;

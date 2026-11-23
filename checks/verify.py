@@ -54,7 +54,7 @@ for name, variant, expected in [
     positive = config + sets + " SELECT version(); SELECT json_extract_string('{\"v\":\"works-λ\"}', '$.v'); LOAD json; LOAD json;"
     r = run(name + "-cli", cli + [positive], trace=True)
     rows = list(csv.reader(r.stdout.splitlines()))
-    assert rows == [[expected], ["v2.0.0"], ["works-λ"]], rows
+    assert rows == [[expected], ["v2.0.1"], ["works-λ"]], rows
     one_engine(name + "-cli", r.stderr, variant)
     icu = "SELECT epoch(timezone('Europe/Amsterdam', TIMESTAMP '2026-01-15 12:00:00')) = epoch(TIMESTAMPTZ '2026-01-15 11:00:00+00');"
     r = run(name + "-cli-icu", cli + [config + icu], success="icu" in expected)

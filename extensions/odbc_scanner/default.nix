@@ -7,9 +7,7 @@
 
 mkExtension {
   linkCmake = ''
-    find_package(ODBC REQUIRED)
-    find_library(ODBCINST_LIBRARY NAMES odbcinst REQUIRED)
-    target_link_libraries(duckdb PRIVATE ODBC::ODBC ''${ODBCINST_LIBRARY})
+    target_link_libraries(duckdb PRIVATE "''${EXTENSION_PREFIX}/lib/libduckdb_cpp_api.a" ''${CMAKE_DL_LIBS})
   '';
 
   name = "odbc_scanner";
@@ -18,9 +16,14 @@ mkExtension {
     src = extensionSources.odbc_scanner;
     postPatch = ''
       cp ${./CMakeLists.txt} CMakeLists.txt
-      cp ${./capi_entry_point.cpp} src/capi_entry_point.cpp
+      # The driver manager is now loaded with dlopen; resolve it from Nix.
+      substituteInPlace src/driver_manager.cpp \
+        --replace-fail '"libodbc.2.dylib"' '"${unixodbc}/lib/libodbc.2.dylib"' \
+        --replace-fail '"libodbc.so.2"' '"${unixodbc}/lib/libodbc.so.2"'
     '';
   };
+
+  extraArchives = [ "tools/cpp/libduckdb_cpp_api.a" ];
 
   buildInputs = [ unixodbc ];
 }

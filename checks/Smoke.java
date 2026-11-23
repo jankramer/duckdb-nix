@@ -37,7 +37,7 @@ public final class Smoke {
         for (int i = 0; i < 3; i++) {
             try (Connection c = DriverManager.getConnection("jdbc:duckdb:", p)) {
                 equal(expected, scalar(c, SETS)); // inspect before invoking any extension function
-                equal("v2.0.0", scalar(c, "SELECT version()"));
+                equal("v2.0.1", scalar(c, "SELECT version()"));
                 equal("42", scalar(c, "SELECT 6 * 7"));
                 try (PreparedStatement s = c.prepareStatement("SELECT json_extract_string(?::JSON, '$.v')")) {
                     s.setString(1, "{\"v\":\"works-λ\"}");

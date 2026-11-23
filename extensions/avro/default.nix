@@ -23,12 +23,13 @@ mkExtension {
     find_package(LibLZMA REQUIRED)
     find_package(ZLIB REQUIRED)
     target_link_libraries(duckdb PRIVATE ''${AVRO_LIBRARY} ''${JANSSON_LIBRARY} Snappy::snappy LibLZMA::LibLZMA ZLIB::ZLIB)
+    target_link_libraries(duckdb PRIVATE "''${EXTENSION_PREFIX}/lib/libduckdb_cpp_api.a")
   '';
 
   name = "avro";
 
-  # Use the separately packaged avro-c. The release's avro patch only changes
-  # Windows compilation of the bundled submodule, which we do not build.
+  # Use the separately packaged avro-c. The release's patches only affect
+  # Windows compilation of the bundled submodule and Wasm library paths.
   src = applyPatches {
     src = extensionSources.avro;
     postPatch = ''
@@ -39,6 +40,8 @@ mkExtension {
         --replace-fail 'TARGETS ''${EXTENSION_NAME} avro-static' 'TARGETS ''${EXTENSION_NAME}'
     '';
   };
+
+  extraArchives = [ "tools/cpp/libduckdb_cpp_api.a" ];
 
   buildInputs = [
     avro-c

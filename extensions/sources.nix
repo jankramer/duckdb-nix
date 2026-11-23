@@ -1,4 +1,4 @@
-# Match the extension revisions and compatibility patches shipped with DuckDB 2.0.
+# Match the extension revisions and compatibility patches shipped with DuckDB 2.0.1.
 {
   applyPatches,
   fetchFromGitHub,
@@ -16,27 +16,27 @@ in
   avro = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-avro";
-    rev = "758fb6063cbb6da49b2e1c16c4044cfcafefc52f";
-    hash = "sha256-8e+nuPU7JPt0sHgYI0OykzJPsS/dMj0y/ny36qKJQD0=";
+    rev = "4176191c961fe5c0763976b8b869e30ba0e93054";
+    hash = "sha256-6DFuT5Atp74Gz0fbPe/XRQuJAC1d6DFDclOcyxjIm0U=";
   };
   aws = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-aws";
-    rev = "16ae9c135300f750478d648c2496f2952a6f2827";
-    hash = "sha256-YjOMPH2jdQ8s8VYXM+lhhvx0Lbp4KT/YVc5Yg67w3mI=";
+    rev = "1b96925856ded7c9cbde7403fdb3d467d0cdf779";
+    hash = "sha256-SQs9ywEBTKAX3sy2R0y3h6SAP9TjARGiAyUzMCHLFiA=";
   };
   azure = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-azure";
-    rev = "906e92458c33309e5d9413e14a85aad7b4d2275f";
-    hash = "sha256-UJBf8lsJqaRpIwqR9+tGpVx3h5OjLiPAbgZl6L5Hemw=";
+    rev = "bf93a0af8f28fff67c0084c438d20124fd810948";
+    hash = "sha256-7cdGLJF5B/4dmLXFNfO8KSBPHdBFgL9F3ng8qbJONkM=";
   };
   ducklake = applyPatches {
     src = fetchFromGitHub {
       owner = "duckdb";
       repo = "ducklake";
-      rev = "417a9117f590e8141742ac0579d02f6a90162e37";
-      hash = "sha256-CfGNeFJlTjLS5/2GEg4EU8Ph9I8mLPax96wCNOIrgZk=";
+      rev = "08089b16dc8a18ce04abb6efd87e25cb4d64803a";
+      hash = "sha256-T4XA2TrADtdhW3axrn5nytWEC27QeBYDXFReergDm2c=";
     };
     patches = [
       (duckdb-src + "/.github/patches/extensions/ducklake/0018-timestamptz-retype-test-load-icu.patch")
@@ -48,11 +48,20 @@ in
       (duckdb-src + "/.github/patches/extensions/ducklake/0022-add-files-tests-duckdb-data-path.patch")
       (
         duckdb-src
-        + "/.github/patches/extensions/ducklake/0022-remote-path-aliases-legacy-url-parameters.patch"
+        + "/.github/patches/extensions/ducklake/0023-skip-murmur3-small-numeric-types-on-windows.patch"
+      )
+      (duckdb-src + "/.github/patches/extensions/ducklake/0028-nested-schema-capability-error.patch")
+      (
+        duckdb-src + "/.github/patches/extensions/ducklake/0029-ordered-copy-rotates-in-batch-writer.patch"
       )
       (
         duckdb-src
-        + "/.github/patches/extensions/ducklake/0023-skip-murmur3-small-numeric-types-on-windows.patch"
+        + "/.github/patches/extensions/ducklake/0030-drop-macro-test-last-schema-name-resolution.patch"
+      )
+      (duckdb-src + "/.github/patches/extensions/ducklake/0031-table-changes-tests-load-icu.patch")
+      (
+        duckdb-src
+        + "/.github/patches/extensions/ducklake/0032-sqlite-locked-commit-without-sql-in-error.patch"
       )
     ];
   };
@@ -72,20 +81,26 @@ in
     src = fetchFromGitHub {
       owner = "duckdb";
       repo = "duckdb-fts";
-      rev = "2266e67d01c737cb65114e77c7c672e58869a635";
-      hash = "sha256-Y8MPRvD5XFsLpPEsVzALq3jQk9vqEidGBcvPDHdjkMc=";
+      rev = "623ee80e0bd5a771347f7dd320915cc3ef2fb965";
+      hash = "sha256-6uQnLho05QmIC2CKTwqx4fvKTP6wJ3mibpz63QSP968=";
     };
     patches = [
       (duckdb-src + "/.github/patches/extensions/fts/0001-get-default-schema-optional.patch")
       (duckdb-src + "/.github/patches/extensions/fts/0002-fts-indexing-includes.patch")
       (duckdb-src + "/.github/patches/extensions/fts/0003-pragma-function-signature-options.patch")
+      (duckdb-src + "/.github/patches/extensions/fts/0004-shorten-persistence-test-extension-dirs.patch")
+      (
+        duckdb-src
+        + "/.github/patches/extensions/fts/0005-autoload-json-before-creating-indexes-in-tests.patch"
+      )
+      (duckdb-src + "/.github/patches/extensions/fts/0006-skip-persistence-test-under-autoloading.patch")
     ];
   };
   iceberg = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-iceberg";
-    rev = "4c0c0874c48ec82a3e29910554891d04bcc0e988";
-    hash = "sha256-zwhf6ePplnWagroxJ7hojgJrllRSRX66/9wH+qi3Fzw=";
+    rev = "f979b5b28a044c49c38a26636ac01bc1f7047fa5";
+    hash = "sha256-gwYRha9c3ToO/cTxLdcxGK4wR2vYjVr6aYIs2Z83zOA=";
   };
   inet = applyPatches {
     src = fetchFromGitHub {
@@ -112,30 +127,25 @@ in
     src = fetchFromGitHub {
       owner = "duckdb";
       repo = "duckdb-mysql";
-      rev = "f7fc0d42716534aa5ad48626d21ced9807b33967";
-      hash = "sha256-d3Ly/Sj7xRX1bL9zKLgcRyOYhdI0vXuTVYhdDuv88co=";
+      rev = "e04d8eef94c94e70c5d5663895610b1bb475d506";
+      hash = "sha256-C5B+/mE847FRfkAWIxe1bBynMGyaz4pAYMd6PhxEW3g=";
     };
     postPatch = ''
       cp -R ${databaseConnector}/. database-connector/
     '';
   };
-  odbc_scanner = applyPatches {
-    src = fetchFromGitHub {
-      owner = "duckdb";
-      repo = "odbc-scanner";
-      rev = "a33698df40f95cc3eb339703dcb085497eabfca3";
-      hash = "sha256-H3seSmjDKK5R+xYyEjOe1zGpM7kch8I0qqD/5KzUWQg=";
-    };
-    patches = [
-      (duckdb-src + "/.github/patches/extensions/odbc_scanner/0001-check-external-access.patch")
-    ];
+  odbc_scanner = fetchFromGitHub {
+    owner = "duckdb";
+    repo = "odbc-scanner";
+    rev = "ef4382fbfcb238e3012373384ae4e1953f3736a3";
+    hash = "sha256-7sja9Sqfm0bmYixmQQ5AaGF/bSOZVePuo1ybZKTRCjc=";
   };
   postgres_scanner = applyPatches {
     src = fetchFromGitHub {
       owner = "duckdb";
       repo = "duckdb-postgres";
-      rev = "c0f5a3c0c4b68b02afbf669d36d7f0e503985c88";
-      hash = "sha256-97aAF2O4mZLPSmIko8jdV2orR/2M8i13SU1a1yXV8sA=";
+      rev = "8b9d0bbe8de4c57fb90d9e2530f9ce39f8c4baf3";
+      hash = "sha256-SdjIeRIFhoVHrBaRhWVuNr1M5DYxe7L6pQZbbnm6CnY=";
     };
     postPatch = ''
       cp -R ${databaseConnector}/. database-connector/
@@ -144,15 +154,15 @@ in
   quack = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-quack";
-    rev = "f96420ed46aee9c42064bdb99ddfd1230d6c0086";
-    hash = "sha256-S3/yaeTiJoA3efiMPksLVGlfKm3JH7I3tzuub9v3IQg=";
+    rev = "3bc63c01f80a13d57ca02a721dd13908c1d934c1";
+    hash = "sha256-DnmliMjsx2pgan7RVKT35Y2Ohj4mISDqKxFOYF/TWkY=";
   };
   sqlite_scanner = applyPatches {
     src = fetchFromGitHub {
       owner = "duckdb";
       repo = "duckdb-sqlite";
-      rev = "e223dc01493414cef6d5960744f1e048d59fc592";
-      hash = "sha256-xVrOkXXs4ahXPgTkshgwZyg1D0mPRGYh+bm5eEUXwpg=";
+      rev = "ce0987fda4f6393231c6783ee32f72ab873a6d3e";
+      hash = "sha256-KgYk1WWuPmzxm4kZ+IvN+hZIzCVV66BX3Yxnt7lgrnE=";
     };
     postPatch = ''
       cp -R ${databaseConnector}/. database-connector/
@@ -167,8 +177,8 @@ in
   unity_catalog = fetchFromGitHub {
     owner = "duckdb";
     repo = "unity_catalog";
-    rev = "cc59382f5292997293a57c2ab336c9aa97c05f2d";
-    hash = "sha256-ckkEODsfQH+hI0QbODWRUOWe9PodsbMxMzkpob/YAM4=";
+    rev = "4cca9f7efd00930039134693e7cbd09fc4771acb";
+    hash = "sha256-nC3IAt0S6MWCCyxEHMZZkOLFHCeqb6sJis7RYq4+pq8=";
   };
   vss = fetchFromGitHub {
     owner = "duckdb";

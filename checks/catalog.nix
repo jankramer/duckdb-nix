@@ -10,6 +10,7 @@ let
   names = pkgs.lib.subtractLists (baseNames ++ [ "gcs" ]) (builtins.attrNames duckdb.extensions);
   probes = {
     autocomplete = "SELECT * FROM sql_auto_complete('SELECT ') LIMIT 1";
+    avro = "SELECT CASE WHEN count(*) = 1000 THEN true ELSE error('Unexpected Avro row count') END FROM read_avro('${duckdb.extensions.avro.extensionSrc}/test/userdata1.avro')";
     demo_capi = "SELECT add_numbers_together(19, 23)";
     inet = "SELECT '127.0.0.1'::INET";
     sqlite_scanner = "ATTACH ':memory:' AS s (TYPE SQLITE); CREATE TABLE s.t AS SELECT 42 AS i; SELECT * FROM s.t";
@@ -25,7 +26,11 @@ pkgs.lib.genAttrs names (
   let
     selected =
       baseNames
-      ++ pkgs.lib.optional (name == "iceberg") "avro"
+      # Iceberg depends on Avro; ODBC and Avro both link the C++ API archive.
+      ++ pkgs.lib.optional (builtins.elem name [
+        "iceberg"
+        "odbc_scanner"
+      ]) "avro"
       # Both scanners define similarly named C++ helpers; test their composition.
       ++ pkgs.lib.optional (name == "mysql_scanner") "postgres_scanner"
       ++ [ name ];

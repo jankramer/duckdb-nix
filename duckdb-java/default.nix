@@ -10,12 +10,12 @@
 
 stdenv.mkDerivation {
   pname = "duckdb-java";
-  version = "2.0.0.0";
+  version = "2.0.1.0";
   src = fetchFromGitHub {
     owner = "duckdb";
     repo = "duckdb-java";
-    rev = "eb43895e47788e398a7a64c16505046364fa75ea";
-    hash = "sha256-V626XOGYWTcTyTszbtlWmEXkkzoWnl7RkbCcDGHfDbY=";
+    rev = "9def6924c6da0a41a193f4646878e7ac695e9476";
+    hash = "sha256-N0uItArQkcarWGbXQfb9/1mHTjfarA3BMdHCzBaisFs=";
   };
   nativeBuildInputs = [
     cmake
